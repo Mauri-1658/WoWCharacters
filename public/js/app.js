@@ -190,6 +190,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       closeFactionModal();
     }
   });
+
+  // Dashboard filter toggle
+  const btnToggleFilters = $('#btn-toggle-filters');
+  const filtersBar = $('#filters-bar');
+  if (btnToggleFilters && filtersBar) {
+    btnToggleFilters.addEventListener('click', () => {
+      const isCollapsed = filtersBar.classList.toggle('collapsed');
+      btnToggleFilters.classList.toggle('active', !isCollapsed);
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════

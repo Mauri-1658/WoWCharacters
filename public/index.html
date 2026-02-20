@@ -124,8 +124,21 @@
       </div>
     </div>
 
+    <!-- Filters Toggle -->
+    <div class="filters-toggle-container">
+      <button id="btn-toggle-filters" class="btn-toggle-filters">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="toggle-icon">
+          <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+        </svg>
+        <span>Filtros</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron-icon">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+    </div>
+
     <!-- Filters -->
-    <div class="filters-bar">
+    <div id="filters-bar" class="filters-bar collapsed">
       <div class="filter-group">
         <label class="filter-label">Facción</label>
         <select id="filter-faction" class="filter-select">

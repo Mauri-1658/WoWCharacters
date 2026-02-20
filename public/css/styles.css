@@ -468,6 +468,53 @@ body {
 /* ═══════════════════════════════════════════════════════════
    FILTERS BAR
    ═══════════════════════════════════════════════════════════ */
+.filters-toggle-container {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.btn-toggle-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--radius-xl);
+  color: var(--text-secondary);
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition-med);
+  letter-spacing: 0.05em;
+}
+
+.btn-toggle-filters:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--gold);
+  color: var(--gold-light);
+  transform: translateY(-2px);
+}
+
+.btn-toggle-filters.active {
+  background: rgba(212, 168, 67, 0.1);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.btn-toggle-filters .toggle-icon,
+.btn-toggle-filters .chevron-icon {
+  width: 18px;
+  height: 18px;
+  transition: var(--transition-med);
+}
+
+.btn-toggle-filters.active .chevron-icon {
+  transform: rotate(180deg);
+}
+
 .filters-bar {
   display: flex;
   flex-wrap: wrap;
@@ -475,6 +522,19 @@ body {
   justify-content: center;
   padding: 0.75rem 1.5rem 1rem;
   border-bottom: 1px solid var(--glass-border);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  max-height: 500px;
+  opacity: 1;
+}
+
+.filters-bar.collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  border-bottom-color: transparent;
+  pointer-events: none;
 }
 
 .filter-group {
