@@ -817,6 +817,8 @@ function updateStats() {
 }
 
 
+const MAX_ACHIEVEMENT_POINTS = 53610;
+
 // ═══════════════════════════════════════════════════════════
 // CHARACTER DETAIL MODAL
 // ═══════════════════════════════════════════════════════════
@@ -838,6 +840,7 @@ async function openCharDetail(realmSlug, charName) {
   $('#modal-spec').textContent = '—';
   $('#modal-realm').textContent = '—';
   $('#modal-achievements').textContent = '—';
+  $('#modal-achievements-pct').textContent = '0%';
   $('#modal-last-login').textContent = '—';
   $('#modal-equipment').innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Cargando equipo...</p>';
 
@@ -875,7 +878,12 @@ async function openCharDetail(realmSlug, charName) {
     $('#modal-class').textContent = getClassShort(char.character_class?.name) || '—';
     $('#modal-spec').textContent = char.active_spec?.name || '—';
     $('#modal-realm').textContent = char.realm?.name || '—';
-    $('#modal-achievements').textContent = char.achievement_points || '—';
+    
+    // Achievements
+    const points = char.achievement_points || 0;
+    $('#modal-achievements').textContent = points.toLocaleString('es-ES');
+    const pct = ((points / MAX_ACHIEVEMENT_POINTS) * 100).toFixed(1);
+    $('#modal-achievements-pct').textContent = `${pct}%`;
 
     if (char.last_login_timestamp) {
       const date = new Date(char.last_login_timestamp);
