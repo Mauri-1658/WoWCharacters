@@ -503,11 +503,6 @@ function renderCharacters() {
            style="--class-color: ${classColor}"
            data-realm="${char.realmSlug}"
            data-name="${char.name}">
-        <button class="btn-star" onclick="event.stopPropagation(); toggleMain('${char.realmSlug}', '${char.name}')" title="Marcar como principal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        </button>
         <div class="char-card-inner" onclick="openCharDetail('${char.realmSlug}', '${char.name}')">
           <div class="char-avatar-wrap">
             <div class="char-avatar char-avatar-placeholder" id="avatar-${char.realmSlug}-${char.name}" style="
@@ -695,11 +690,11 @@ async function loadCardAvatars(characters, forFriends = false) {
 // MAIN CHARACTERS (FAVORITES)
 // ═══════════════════════════════════════════════════════════
 function getCharKey(char) {
-  return `${char.realmSlug}|${char.name}`;
+  return `${char.realmSlug}|${char.name}`.toLowerCase();
 }
 
 function toggleMain(realmSlug, charName) {
-  const key = `${realmSlug}|${charName}`;
+  const key = `${realmSlug}|${charName}`.toLowerCase();
   if (mainCharIds.has(key)) {
     mainCharIds.delete(key);
   } else {
@@ -730,11 +725,6 @@ function renderMains() {
       <div class="main-card ${factionClass}"
            style="--class-color: ${classColor}"
            onclick="openCharDetail('${char.realmSlug}', '${char.name}')">
-        <button class="btn-star starred btn-star-main" onclick="event.stopPropagation(); toggleMain('${char.realmSlug}', '${char.name}')" title="Quitar de principales">
-          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        </button>
         <div class="main-card-avatar-wrap">
           <div class="char-avatar char-avatar-placeholder" id="main-avatar-${char.realmSlug}-${char.name}" style="
             background: linear-gradient(135deg, ${classColor}33, ${classColor}11);
@@ -965,6 +955,26 @@ async function openCharDetail(realmSlug, charName) {
   const newFriendBtn = friendBtn.cloneNode(true);
   friendBtn.parentNode.replaceChild(newFriendBtn, friendBtn);
   
+  // Favorite button logic (only for owned characters)
+  const favBtn = $('#modal-btn-favorite');
+  if (isOwned) {
+    favBtn.classList.remove('hidden');
+    const isMain = mainCharIds.has(characterKey);
+    favBtn.classList.toggle('active', isMain);
+    favBtn.querySelector('span').textContent = isMain ? 'Principal' : 'Favorito';
+    
+    // Replace listener
+    const newFavBtn = favBtn.cloneNode(true);
+    favBtn.parentNode.replaceChild(newFavBtn, favBtn);
+    newFavBtn.addEventListener('click', () => {
+      toggleMain(realmSlug, charName.toLowerCase()); // toggleMain uses lowerCase key
+      const active = newFavBtn.classList.toggle('active');
+      newFavBtn.querySelector('span').textContent = active ? 'Principal' : 'Favorito';
+    });
+  } else {
+    favBtn.classList.add('hidden');
+  }
+
   newFriendBtn.addEventListener('click', () => {
     toggleFriend(realmSlug, charName);
     const active = newFriendBtn.classList.toggle('active');
