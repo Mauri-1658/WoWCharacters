@@ -1,0 +1,16 @@
+{
+  "name": "battlenet-manager",
+  "version": "1.0.0",
+  "description": "Battle.net WoW Character Manager",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0"
+  }
+}

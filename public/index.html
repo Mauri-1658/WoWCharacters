@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Gestiona tus personajes de World of Warcraft desde tu cuenta de Battle.net">
+  <title>WoWCharacters — WoW Character Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ═══ LOGIN SCREEN ═══ -->
+  <section id="login-screen" class="screen active">
+    <div class="login-bg-effects">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="login-container">
+      <div class="login-logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40">
+            <path d="M14.5 17.5 3 6V3h3l11.5 11.5"/>
+            <path d="m13 19 8-8V8h-3l-8 8"/>
+            <path d="m3 21 8-8"/>
+          </svg>
+        </div>
+        <h1 class="logo-title">WoWCharacters</h1>
+        <p class="logo-subtitle">WoW Character Manager</p>
+      </div>
+      <a href="/auth/login" class="btn-login" id="btn-login">
+        <span class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </span>
+        <span class="btn-text">Conectar con Battle.net</span>
+        <span class="btn-glow"></span>
+      </a>
+      <p class="login-hint">Inicia sesión con tu cuenta de Battle.net para ver tus personajes</p>
+      <div id="login-error" class="login-error hidden"></div>
+    </div>
+  </section>
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <section id="dashboard" class="screen">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="topbar-logo">WoWCharacters</h1>
+      </div>
+      <div class="topbar-center">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" id="search-input" placeholder="Buscar personaje..." autocomplete="off">
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="user-info">
+          <span class="user-battletag" id="user-battletag">Cargando...</span>
+          <button class="btn-logout" id="btn-logout" title="Cerrar sesión">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value" id="stat-total">0</span>
+          <span class="stat-label">Personajes</span>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value" id="stat-max-level">0</span>
+          <span class="stat-label">Nivel Máx</span>
+        </div>
+      </div>
+      <div class="stat-item stat-alliance" id="stat-item-alliance" title="Ver reparto de razas Alianza">
+        <div class="stat-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L4.5 5V11C4.5 15.5 12 21 12 21S19.5 15.5 19.5 11V5L12 2Z"/>
+            <path d="M12 7V15M9 10L15 10"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value" id="stat-alliance">0</span>
+          <span class="stat-label">Alianza</span>
+        </div>
+      </div>
+      <div class="stat-item stat-horde" id="stat-item-horde" title="Ver reparto de razas Horda">
+        <div class="stat-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+             <path d="M12 3C12 3 5 7 5 12C5 17 12 21 12 21C12 21 19 17 19 12C19 7 12 3 12 3Z"/>
+             <path d="M12 8C10.5 8 9.5 9 9.5 10.5C9.5 12 12 11.5 12 13.5C12 15 10.5 16 9 16"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value" id="stat-horde">0</span>
+          <span class="stat-label">Horda</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label class="filter-label">Facción</label>
+        <select id="filter-faction" class="filter-select">
+          <option value="all">Todas</option>
+          <option value="ALLIANCE">Alianza</option>
+          <option value="HORDE">Horda</option>
+          <option value="NEUTRAL">Neutral</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Clase</label>
+        <select id="filter-class" class="filter-select">
+          <option value="all">Todas</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Reino</label>
+        <select id="filter-realm" class="filter-select">
+          <option value="all">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Ordenar por</label>
+        <select id="sort-by" class="filter-select">
+          <option value="level-desc">Nivel ↓</option>
+          <option value="level-asc">Nivel ↑</option>
+          <option value="name-asc">Nombre A-Z</option>
+          <option value="name-desc">Nombre Z-A</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Main Characters Section -->
+    <div id="mains-section" class="mains-section hidden">
+      <div class="mains-header">
+        <h2 class="mains-title">Personajes Principales</h2>
+        <span class="mains-count" id="mains-count">0</span>
+      </div>
+      <div id="mains-grid" class="mains-grid">
+        <!-- Main characters rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Friends Section -->
+    <div id="friends-section" class="friends-section hidden">
+      <div class="friends-header">
+        <h2 class="friends-title">Amigos</h2>
+        <span class="friends-count" id="friends-count">0</span>
+      </div>
+      <div id="friends-grid" class="friends-grid">
+        <!-- Friend characters rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Character Grid -->
+    <main class="characters-container">
+      <div class="characters-container-header">
+        <h2 class="all-chars-title">Todos los personajes</h2>
+      </div>
+      <div id="characters-grid" class="characters-grid">
+        <!-- Characters will be rendered here by JS -->
+      </div>
+      <div id="no-results" class="no-results hidden">
+        <p class="no-results-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </p>
+        <p class="no-results-text">No se encontraron personajes con esos filtros</p>
+      </div>
+      <div id="loading-spinner" class="loading-spinner hidden">
+        <div class="spinner"></div>
+        <p>Invocando a tus personajes...</p>
+      </div>
+    </main>
+  </section>
+
+  <!-- ═══ CHARACTER DETAIL MODAL (FULLSCREEN) ═══ -->
+  <div id="char-modal" class="modal hidden">
+    <div class="modal-overlay" id="modal-overlay"></div>
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close">✕</button>
+
+      <!-- Left Panel: Character Info -->
+      <div class="modal-left">
+        <div class="modal-portrait-wrap">
+          <img id="modal-avatar" class="modal-portrait" src="" alt="Avatar">
+          <div class="modal-portrait-placeholder" id="modal-portrait-placeholder"></div>
+        </div>
+        <div class="modal-char-info">
+          <div class="modal-header-actions">
+            <button class="modal-action-btn" id="modal-btn-friend" title="Seguir a este amigo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/>
+              </svg>
+              <span>Seguir</span>
+            </button>
+          </div>
+          <div class="modal-char-name" id="modal-name">—</div>
+          <div class="modal-ilvl-header" id="modal-ilvl-header-container">
+            <span class="ilvl-header-label">ILVL</span>
+            <span class="ilvl-header-val" id="modal-ilvl-header">—</span>
+          </div>
+          <div class="modal-tags">
+            <span class="tag tag-level" id="modal-level">Nivel —</span>
+            <span class="tag" id="modal-faction">—</span>
+          </div>
+          <div class="modal-stats-grid">
+            <div class="modal-stat">
+              <div class="modal-stat-data">
+                <span class="modal-stat-label">Raza</span>
+                <span class="modal-stat-value" id="modal-race">—</span>
+              </div>
+              <div class="modal-stat-icon-wrap" id="modal-race-icon-wrap"></div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-data">
+                <span class="modal-stat-label">Clase</span>
+                <span class="modal-stat-value" id="modal-class">—</span>
+              </div>
+              <div class="modal-stat-icon-wrap" id="modal-class-icon-wrap"></div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-data">
+                <span class="modal-stat-label">Especialización</span>
+                <span class="modal-stat-value" id="modal-spec">—</span>
+              </div>
+              <div class="modal-stat-icon-wrap" id="modal-spec-icon-wrap"></div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-data">
+                <span class="modal-stat-label">Reino</span>
+                <span class="modal-stat-value" id="modal-realm">—</span>
+              </div>
+              <div class="modal-stat-icon-wrap" id="modal-realm-icon-wrap"></div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-data">
+                <span class="modal-stat-label">Logros</span>
+                <span class="modal-stat-value" id="modal-achievements">—</span>
+              </div>
+              <div class="modal-stat-icon-wrap" id="modal-achievements-icon-wrap"></div>
+            </div>
+            <div class="modal-stat">
+              <div class="modal-stat-data">
+                <span class="modal-stat-label">Última conexión</span>
+                <span class="modal-stat-value" id="modal-last-login">—</span>
+              </div>
+              <div class="modal-stat-icon-wrap" id="modal-connection-icon-wrap"></div>
+            </div>
+          </div>
+
+          <!-- PvE Progress Section -->
+          <div class="modal-pve-section">
+            <div class="pve-header">
+              <span class="pve-title">Progreso PvE</span>
+              <div id="modal-mplus-score" class="mplus-score hidden">Rating M+ 0</div>
+            </div>
+            <div id="modal-raids-container" class="raids-container">
+              <p class="loading-text" style="color:var(--text-muted); font-size:0.8rem;">Cargando progreso...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Equipment -->
+      <div class="modal-right">
+        <h3 class="modal-section-title">Equipo</h3>
+        <div class="equipment-grid" id="modal-equipment">
+          <!-- Equipment rendered by JS -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+    <!-- Faction Stats Modal -->
+    <div id="faction-modal" class="modal hidden">
+      <div class="modal-overlay"></div>
+      <div class="modal-content faction-modal-content">
+        <button id="faction-modal-close" class="modal-close">&times;</button>
+        <div class="faction-modal-body">
+          <h2 id="faction-modal-title" class="faction-modal-title">Reparto de Razas</h2>
+          <div id="faction-stats-list" class="faction-stats-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/app.js"></script>
+  </body>
+</html>

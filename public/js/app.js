@@ -1,0 +1,1274 @@
+/* ═══════════════════════════════════════════════════════════
+   NEXUS — WoW Character Manager
+   Frontend Application Logic
+   ═══════════════════════════════════════════════════════════ */
+
+// ─── WoW Class Color Map ────────────────────────────────────
+const CLASS_COLORS = {
+  Guerrero: "#C79C6E",
+  Warrior: "#C79C6E",
+  Paladín: "#F58CBA",
+  Paladin: "#F58CBA",
+  Cazador: "#ABD473",
+  Hunter: "#ABD473",
+  Pícaro: "#FFF569",
+  Rogue: "#FFF569",
+  Sacerdote: "#FFFFFF",
+  Priest: "#FFFFFF",
+  "Caballero de la Muerte": "#C41E3A",
+  "Death Knight": "#C41E3A",
+  Chamán: "#0070DE",
+  Shaman: "#0070DE",
+  Mago: "#69CCF0",
+  Mage: "#69CCF0",
+  Brujo: "#9482C9",
+  Warlock: "#9482C9",
+  Monje: "#00FF96",
+  Monk: "#00FF96",
+  Druida: "#FF7D0A",
+  Druid: "#FF7D0A",
+  "Cazador de demonios": "#A330C9",
+  "Demon Hunter": "#A330C9",
+  Evocador: "#33937F",
+  Evoker: "#33937F",
+};
+
+// ─── Class Short Names (Spanish → English) ──────────────────
+const CLASS_SHORT_NAMES = {
+  'Warrior': 'Warrior',
+  'Paladin': 'Paladin',
+  'Hunter': 'Hunter',
+  'Rogue': 'Rogue',
+  'Priest': 'Priest',
+  'Death Knight': 'DK',
+  'Shaman': 'Shaman',
+  'Mage': 'Mage',
+  'Warlock': 'Warlock',
+  'Monk': 'Monk',
+  'Druid': 'Druid',
+  'Demon Hunter': 'DH',
+  'Evoker': 'Evoker',
+  // Spanish keys
+  'Guerrero': 'Warrior',
+  'Paladín': 'Paladin',
+  'Cazador': 'Hunter',
+  'Pícaro': 'Rogue',
+  'Sacerdote': 'Priest',
+  'Caballero de la Muerte': 'DK',
+  'Chamán': 'Shaman',
+  'Mago': 'Mage',
+  'Brujo': 'Warlock',
+  'Monje': 'Monk',
+  'Druida': 'Druid',
+  'Cazador de demonios': 'DH',
+  'Evocador': 'Evoker',
+};
+
+function getClassShort(className) {
+  return CLASS_SHORT_NAMES[className] || className;
+}
+
+// ─── Quality Colors ─────────────────────────────────────────
+const QUALITY_CLASSES = {
+  POOR: "quality-poor",
+  COMMON: "quality-common",
+  UNCOMMON: "quality-uncommon",
+  RARE: "quality-rare",
+  EPIC: "quality-epic",
+  LEGENDARY: "quality-legendary",
+  ARTIFACT: "quality-artifact",
+  HEIRLOOM: "quality-heirloom",
+};
+
+// ─── State ──────────────────────────────────────────────────
+let allCharacters = [];
+let filteredCharacters = [];
+let currentUser = null;
+let mainCharIds = new Set(JSON.parse(localStorage.getItem('nexus_mains') || '[]'));
+let friendChars = JSON.parse(localStorage.getItem('nexus_friends') || '[]'); // Array of {name, realm}
+let allFriendData = [];
+
+// ─── DOM Elements ───────────────────────────────────────────
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+const loginScreen = $("#login-screen");
+const dashboard = $("#dashboard");
+const loginError = $("#login-error");
+const userBattletag = $("#user-battletag");
+const btnLogout = $("#btn-logout");
+const searchInput = $("#search-input");
+const filterFaction = $("#filter-faction");
+const filterClass = $("#filter-class");
+const filterRealm = $("#filter-realm");
+const sortBy = $("#sort-by");
+const charsGrid = $("#characters-grid");
+const noResults = $("#no-results");
+const loadingSpinner = $("#loading-spinner");
+
+// Mains
+const mainsSection   = $('#mains-section');
+const mainsGrid      = $('#mains-grid');
+const mainsCount     = $('#mains-count');
+
+// Friends
+const friendsSection = $('#friends-section');
+const friendsGrid    = $('#friends-grid');
+const friendsCount   = $('#friends-count');
+
+// Stats
+const statTotal = $("#stat-total");
+const statMaxLevel = $("#stat-max-level");
+const statAlliance = $("#stat-alliance");
+const statHorde = $("#stat-horde");
+const statItemAlliance = $("#stat-item-alliance");
+const statItemHorde = $("#stat-item-horde");
+
+// Modals
+const charModal = $("#char-modal");
+const modalOverlay = $("#modal-overlay");
+const modalClose = $("#modal-close");
+
+// Faction Modal
+const factionModal = $("#faction-modal");
+const factionModalClose = $("#faction-modal-close");
+const factionModalTitle = $("#faction-modal-title");
+const factionStatsList = $("#faction-stats-list");
+const factionModalOverlay = factionModal.querySelector(".modal-overlay");
+
+// ═══════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", async () => {
+  // Check for URL error params
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("error")) {
+    showLoginError(getErrorMessage(params.get("error")));
+    history.replaceState(null, "", "/");
+  }
+  if (params.get("login") === "success") {
+    history.replaceState(null, "", "/");
+  }
+
+  // Check auth status
+  try {
+    const res = await fetch("/auth/status", { cache: "no-store" });
+    const data = await res.json();
+
+    if (data.authenticated) {
+      currentUser = data.user;
+      showDashboard();
+      loadCharacters();
+    } else {
+      showLogin();
+    }
+  } catch (err) {
+    showLogin();
+  }
+
+  // Event listeners
+  btnLogout.addEventListener("click", () => {
+    window.location.href = "/auth/logout";
+  });
+  searchInput.addEventListener("input", applyFilters);
+  filterFaction.addEventListener("change", applyFilters);
+  filterClass.addEventListener("change", applyFilters);
+  filterRealm.addEventListener("change", applyFilters);
+  sortBy.addEventListener("change", applyFilters);
+  modalOverlay.addEventListener("click", closeModal);
+  modalClose.addEventListener("click", closeModal);
+  
+  // Faction modal events
+  statItemAlliance.addEventListener("click", () => openFactionModal("ALLIANCE"));
+  statItemHorde.addEventListener("click", () => openFactionModal("HORDE"));
+  factionModalClose.addEventListener("click", closeFactionModal);
+  factionModalOverlay.addEventListener("click", closeFactionModal);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeModal();
+      closeFactionModal();
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// SCREEN MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+function showLogin() {
+  loginScreen.classList.add("active");
+  dashboard.classList.remove("active");
+}
+
+function showDashboard() {
+  loginScreen.classList.remove("active");
+  dashboard.classList.add("active");
+  if (currentUser) {
+    userBattletag.textContent = currentUser.battletag || "Usuario";
+  }
+}
+
+function showLoginError(msg) {
+  loginError.textContent = msg;
+  loginError.classList.remove("hidden");
+}
+
+function getErrorMessage(code) {
+  const messages = {
+    auth_denied: "Autenticación denegada. Inténtalo de nuevo.",
+    no_code: "No se recibió código de autorización.",
+    token_failed: "Error al obtener el token. Verifica tus credenciales.",
+  };
+  return messages[code] || "Error de autenticación desconocido.";
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOAD CHARACTERS
+// ═══════════════════════════════════════════════════════════
+async function loadCharacters() {
+  showLoading(true);
+
+  try {
+    const res = await fetch("/api/user/characters", { cache: "no-store" });
+    if (!res.ok) {
+      if (res.status === 401) {
+        window.location.href = "/auth/logout";
+        return;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    allCharacters = parseCharacters(data);
+    populateFilters();
+    updateStats();
+    await loadFriendsData(); // Load friends after user chars
+    applyFilters();
+  } catch (err) {
+    console.error("Error loading characters:", err);
+    charsGrid.innerHTML = `
+      <div class="no-results">
+        <p class="no-results-text">Error al cargar los personajes: ${err.message}</p>
+      </div>`;
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ─── Parse API Response ────────────────────────────────────
+function parseCharacters(data) {
+  const characters = [];
+
+  if (data.wow_accounts) {
+    for (const account of data.wow_accounts) {
+      if (account.characters) {
+        for (const char of account.characters) {
+          characters.push({
+            id: char.id,
+            name: char.name,
+            level: char.level || 0,
+            realm: char.realm?.name || char.realm?.slug || "—",
+            realmSlug: char.realm?.slug || "",
+            race: char.playable_race?.name || "—",
+            class: char.playable_class?.name || "—",
+            faction: char.faction?.type || char.faction?.name || "NEUTRAL",
+            factionName: char.faction?.name || "Neutral",
+          });
+        }
+      }
+    }
+  }
+
+  return characters;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FILTERS & SORTING
+// ═══════════════════════════════════════════════════════════
+function populateFilters() {
+  const classes = [...new Set(allCharacters.map((c) => c.class))].sort();
+  const realms = [...new Set(allCharacters.map((c) => c.realm))].sort();
+
+  // Populate class filter
+  filterClass.innerHTML = '<option value="all">Todas</option>';
+  classes.forEach((cls) => {
+    const opt = document.createElement("option");
+    opt.value = cls;
+    opt.textContent = cls;
+    filterClass.appendChild(opt);
+  });
+
+  // Populate realm filter
+  filterRealm.innerHTML = '<option value="all">Todos</option>';
+  realms.forEach((realm) => {
+    const opt = document.createElement("option");
+    opt.value = realm;
+    opt.textContent = realm;
+    filterRealm.appendChild(opt);
+  });
+}
+
+function applyFilters() {
+  const search = searchInput.value.toLowerCase().trim();
+  const faction = filterFaction.value;
+  const cls = filterClass.value;
+  const realm = filterRealm.value;
+  const sort = sortBy.value;
+
+  filteredCharacters = allCharacters.filter((c) => {
+    if (
+      search &&
+      !c.name.toLowerCase().includes(search) &&
+      !c.realm.toLowerCase().includes(search)
+    )
+      return false;
+    if (faction !== "all" && c.faction !== faction) return false;
+    if (cls !== "all" && c.class !== cls) return false;
+    if (realm !== "all" && c.realm !== realm) return false;
+    return true;
+  });
+
+  // Sort
+  filteredCharacters.sort((a, b) => {
+    switch (sort) {
+      case "level-desc":
+        return b.level - a.level;
+      case "level-asc":
+        return a.level - b.level;
+      case "name-asc":
+        return a.name.localeCompare(b.name);
+      case "name-desc":
+        return b.name.localeCompare(a.name);
+      default:
+        return 0;
+    }
+  });
+
+  renderCharacters();
+  checkGlobalSearchTrigger(search);
+}
+
+function checkGlobalSearchTrigger(search) {
+  const parts = search.split('-');
+  
+  if (parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2) {
+    // Name-Realm format
+    if (filteredCharacters.length === 0) {
+      appendGlobalSearchPrompt(parts[0], parts[1]);
+    }
+  } else if (search.length >= 3 && !search.includes('-')) {
+    // Name-only format (min 3 chars to avoid too many results)
+    if (filteredCharacters.length === 0) {
+      appendGlobalNameSearchPrompt(search);
+    }
+  }
+}
+
+function appendGlobalNameSearchPrompt(name) {
+  const promptHtml = `
+    <div class="global-search-prompt" onclick="fetchGlobalCharacterByName('${name}')">
+      <div class="prompt-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </div>
+      <div class="prompt-text">
+        <p>¿Buscas a <strong>${name}</strong> en todo Blizzard?</p>
+        <span>Pulsa para buscar en todos los reinos</span>
+      </div>
+    </div>
+  `;
+  charsGrid.innerHTML = promptHtml;
+}
+
+function appendGlobalSearchPrompt(name, realm) {
+  const promptHtml = `
+    <div class="global-search-prompt" onclick="fetchGlobalCharacter('${name}', '${realm}')">
+      <div class="prompt-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </div>
+      <div class="prompt-text">
+        <p>¿No es tuyo? Buscar <strong>${name}</strong> en <strong>${realm}</strong></p>
+        <span>Pulsa para buscar en todo Blizzard</span>
+      </div>
+    </div>
+  `;
+  charsGrid.innerHTML = promptHtml;
+}
+
+async function fetchGlobalCharacterByName(name) {
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/character/search/${name}`, { cache: "no-store" });
+    if (!res.ok) throw new Error('Error en la búsqueda');
+    
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) {
+      throw new Error('Sin resultados');
+    }
+
+    if (data.results.length === 1) {
+      // If only one, open it directly
+      const char = data.results[0];
+      openCharDetail(char.realmSlug, char.name);
+    } else {
+      // Multiple results, show selection list
+      renderSearchResults(data.results, name);
+    }
+  } catch (err) {
+    charsGrid.innerHTML = `
+      <div class="no-results">
+        <p class="no-results-text">No encontramos ningún "${name}" en Blizzard.</p>
+        <span style="font-size:0.8rem; color:var(--text-muted);">Prueba con el formato Nombre-Server o revisa la ortografía.</span>
+      </div>
+    `;
+  } finally {
+    showLoading(false);
+  }
+}
+
+function renderSearchResults(results, queryName) {
+  charsGrid.innerHTML = `
+    <div class="search-results-header" style="grid-column: 1/-1; margin-bottom: 1rem;">
+      <p style="color:var(--text-secondary); font-size:0.9rem;">Se han encontrado ${results.length} personajes llamados "<strong>${queryName}</strong>"</p>
+    </div>
+    ${results.map(char => {
+      const classColor = CLASS_COLORS[char.className] || '#d4a843';
+      const factionClass = char.faction === 'ALLIANCE' ? 'faction-alliance' : 'faction-horde';
+      
+      return `
+        <div class="char-card search-result-card ${factionClass}" 
+             style="--class-color: ${classColor}"
+             onclick="openCharDetail('${char.realmSlug}', '${char.name}')">
+          <div class="char-card-inner">
+            <div class="char-avatar-wrap" style="width: 70px; min-height: 80px;">
+              <div class="char-avatar char-avatar-placeholder" style="font-size: 1.2rem; color: ${classColor};">
+                ${getClassEmoji(char.className)}
+              </div>
+            </div>
+            <div class="char-info" style="padding: 0.75rem;">
+              <div class="char-name">${char.name}</div>
+              <div class="char-meta">${char.level} · ${char.raceName}</div>
+              <span class="char-class" style="color: ${classColor}; border: 1px solid ${classColor}44; background: ${classColor}15; font-size:0.6rem;">
+                ${getClassShort(char.className)}
+              </span>
+              <div class="char-realm" style="font-weight: 700; color: var(--gold);">${char.realm}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER CHARACTERS
+// ═══════════════════════════════════════════════════════════
+function renderCharacters() {
+  // Render mains section
+  renderMains();
+  renderFriends();
+
+  // Filter out main characters from the grid
+  const gridCharacters = filteredCharacters.filter(c => !mainCharIds.has(getCharKey(c)));
+
+  if (gridCharacters.length === 0) {
+    charsGrid.innerHTML = '';
+    noResults.classList.remove('hidden');
+    return;
+  }
+
+  noResults.classList.add('hidden');
+
+  charsGrid.innerHTML = gridCharacters.map(char => {
+    const classColor = CLASS_COLORS[char.class] || '#d4a843';
+    const factionClass = char.faction === 'ALLIANCE' ? 'faction-alliance'
+                       : char.faction === 'HORDE' ? 'faction-horde'
+                       : 'faction-neutral';
+
+    return `
+      <div class="char-card ${factionClass}"
+           style="--class-color: ${classColor}"
+           data-realm="${char.realmSlug}"
+           data-name="${char.name}">
+        <button class="btn-star" onclick="event.stopPropagation(); toggleMain('${char.realmSlug}', '${char.name}')" title="Marcar como principal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </button>
+        <div class="char-card-inner" onclick="openCharDetail('${char.realmSlug}', '${char.name}')">
+          <div class="char-avatar-wrap">
+            <div class="char-avatar char-avatar-placeholder" id="avatar-${char.realmSlug}-${char.name}" style="
+              background: linear-gradient(135deg, ${classColor}33, ${classColor}11);
+              display: flex; align-items: center; justify-content: center;
+              font-size: 1.8rem; color: ${classColor};
+            ">${getClassEmoji(char.class)}</div>
+          </div>
+          <div class="char-info">
+            <div class="char-name">${char.name}</div>
+            <div class="char-meta">${char.race} · ${char.factionName}</div>
+            <span class="char-class" id="badge-${char.realmSlug}-${char.name}" style="color: ${classColor}; border: 1px solid ${classColor}44; background: ${classColor}15;">
+              ${getClassShort(char.class)}
+            </span>
+            <div class="char-realm">${char.realm}</div>
+          </div>
+        </div>
+        <span class="char-level">${char.level}</span>
+        <span class="char-ilvl" id="ilvl-${char.realmSlug}-${char.name}"></span>
+      </div>`;
+  }).join('');
+
+  // Lazy-load character portraits
+  loadCardAvatars(gridCharacters);
+}
+
+// ─── Friends Management ──────────────────────────────────
+async function loadFriendsData() {
+  if (friendChars.length === 0) return;
+  
+  allFriendData = [];
+  const promises = friendChars.map(async (f) => {
+    try {
+      const res = await fetch(`/api/character/${f.realm}/${f.name.toLowerCase()}`, { cache: "no-store" });
+      if (res.ok) {
+        const char = await res.json();
+        allFriendData.push({
+          name: char.name,
+          realm: char.realm?.name,
+          realmSlug: f.realm,
+          level: char.level,
+          class: char.character_class?.name,
+          activeSpec: char.active_spec?.name,
+          race: char.race?.name,
+          faction: char.faction?.type,
+          factionName: char.faction?.name,
+          isFriend: true
+        });
+      }
+    } catch (e) {
+      console.error(`Error loading friend ${f.name}:`, e);
+    }
+  });
+
+  await Promise.all(promises);
+}
+
+function renderFriends() {
+  if (!allFriendData || allFriendData.length === 0) {
+    if (friendsSection) friendsSection.classList.add('hidden');
+    return;
+  }
+
+  if (friendsSection) friendsSection.classList.remove('hidden');
+  if (friendsCount) friendsCount.textContent = allFriendData.length;
+
+  friendsGrid.innerHTML = allFriendData.map(char => {
+    const classColor = CLASS_COLORS[char.class] || '#d4a843';
+    const factionClass = char.faction === 'ALLIANCE' ? 'faction-alliance'
+                       : char.faction === 'HORDE' ? 'faction-horde'
+                       : 'faction-neutral';
+
+    return `
+      <div class="char-card char-card-friend ${factionClass}" 
+           style="--class-color: ${classColor}"
+           data-realm="${char.realmSlug}" 
+           data-name="${char.name}">
+        <button class="btn-remove-friend" onclick="event.stopPropagation(); removeFriend('${char.realmSlug}', '${char.name}')" title="Eliminar de amigos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <div class="char-card-inner" onclick="openCharDetail('${char.realmSlug}', '${char.name}')">
+          <div class="char-avatar-wrap">
+            <div class="char-avatar char-avatar-placeholder" id="friend-avatar-${char.realmSlug}-${char.name}" style="
+              background: linear-gradient(135deg, ${classColor}33, ${classColor}11);
+              display: flex; align-items: center; justify-content: center;
+              font-size: 1.8rem; color: ${classColor};
+            ">${getClassEmoji(char.class)}</div>
+          </div>
+          <div class="char-info">
+            <div class="char-name">${char.name}</div>
+            <div class="char-meta">${char.race} · ${char.factionName}</div>
+            <span class="char-class" id="friend-badge-${char.realmSlug}-${char.name}" style="color: ${classColor}; border: 1px solid ${classColor}44; background: ${classColor}15;">
+              ${getClassShort(char.class)}${char.activeSpec ? ` - ${char.activeSpec}` : ''}
+            </span>
+            <div class="char-realm">${char.realm}</div>
+          </div>
+        </div>
+        <span class="char-level">${char.level}</span>
+        <span class="char-ilvl" id="friend-ilvl-${char.realmSlug}-${char.name}"></span>
+      </div>`;
+  }).join('');
+  
+  // Load avatars for friends
+  loadCardAvatars(allFriendData, true);
+}
+
+function toggleFriend(realm, name) {
+  const index = friendChars.findIndex(f => f.realm === realm && f.name.toLowerCase() === name.toLowerCase());
+  if (index === -1) {
+    friendChars.push({ realm, name });
+  } else {
+    friendChars.splice(index, 1);
+  }
+  localStorage.setItem('nexus_friends', JSON.stringify(friendChars));
+  loadFriendsData().then(renderCharacters);
+}
+
+function removeFriend(realm, name) {
+  friendChars = friendChars.filter(f => !(f.realm === realm && f.name.toLowerCase() === name.toLowerCase()));
+  localStorage.setItem('nexus_friends', JSON.stringify(friendChars));
+  allFriendData = allFriendData.filter(f => !(f.realmSlug === realm && f.name.toLowerCase() === name.toLowerCase()));
+  renderCharacters();
+}
+
+// ─── Lazy-load Avatars for Character Cards ─────────────────
+async function loadCardAvatars(characters, forFriends = false) {
+  for (const char of characters) {
+    const avatarId = forFriends ? `friend-avatar-${char.realmSlug}-${char.name}` : `avatar-${char.realmSlug}-${char.name}`;
+    const ilvlId = forFriends ? `friend-ilvl-${char.realmSlug}-${char.name}` : `ilvl-${char.realmSlug}-${char.name}`;
+
+    try {
+      // Fetch avatar + ilvl in parallel
+      const [mediaRes, detailRes] = await Promise.all([
+        fetch(`/api/character/${char.realmSlug}/${char.name.toLowerCase()}/media`, { cache: "no-store" }),
+        fetch(`/api/character/${char.realmSlug}/${char.name.toLowerCase()}`, { cache: "no-store" })
+      ]);
+
+      // Avatar
+      if (mediaRes.ok) {
+        const media = await mediaRes.json();
+        const avatarAsset =
+          media.assets?.find((a) => a.key === "inset") ||
+          media.assets?.find((a) => a.key === "avatar") ||
+          media.assets?.[0];
+        if (avatarAsset?.value) {
+          const placeholder = document.getElementById(avatarId);
+          if (placeholder) {
+            const img = document.createElement("img");
+            img.src = avatarAsset.value;
+            img.alt = char.name;
+            img.className = "char-avatar char-avatar-img";
+            img.onload = () => { placeholder.replaceWith(img); };
+          }
+        }
+      }
+
+      // iLvl
+      if (detailRes.ok) {
+        const detail = await detailRes.json();
+        const ilvl = detail.equipped_item_level || detail.average_item_level;
+        if (ilvl) {
+          const ilvlEl = document.getElementById(ilvlId);
+          if (ilvlEl) {
+            ilvlEl.textContent = ilvl;
+            ilvlEl.title = 'Item Level';
+          }
+        }
+        // Spec + Short Class Combined
+        const specName = detail.active_spec?.name;
+        if (specName) {
+          const badgeId = forFriends ? `friend-badge-${char.realmSlug}-${char.name}` : `badge-${char.realmSlug}-${char.name}`;
+          const badgeEl = document.getElementById(badgeId);
+          if (badgeEl) badgeEl.textContent = `${getClassShort(char.class)} - ${specName}`;
+        }
+      }
+    } catch (err) {
+      // Keep placeholders on error
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN CHARACTERS (FAVORITES)
+// ═══════════════════════════════════════════════════════════
+function getCharKey(char) {
+  return `${char.realmSlug}|${char.name}`;
+}
+
+function toggleMain(realmSlug, charName) {
+  const key = `${realmSlug}|${charName}`;
+  if (mainCharIds.has(key)) {
+    mainCharIds.delete(key);
+  } else {
+    mainCharIds.add(key);
+  }
+  localStorage.setItem('nexus_mains', JSON.stringify([...mainCharIds]));
+  renderCharacters();
+}
+
+function renderMains() {
+  const mains = allCharacters.filter(c => mainCharIds.has(getCharKey(c)));
+
+  if (mains.length === 0) {
+    mainsSection.classList.add('hidden');
+    return;
+  }
+
+  mainsSection.classList.remove('hidden');
+  mainsCount.textContent = mains.length;
+
+  mainsGrid.innerHTML = mains.map(char => {
+    const classColor = CLASS_COLORS[char.class] || '#d4a843';
+    const factionClass = char.faction === 'ALLIANCE' ? 'faction-alliance'
+                       : char.faction === 'HORDE' ? 'faction-horde'
+                       : 'faction-neutral';
+
+    return `
+      <div class="main-card ${factionClass}"
+           style="--class-color: ${classColor}"
+           onclick="openCharDetail('${char.realmSlug}', '${char.name}')">
+        <button class="btn-star starred btn-star-main" onclick="event.stopPropagation(); toggleMain('${char.realmSlug}', '${char.name}')" title="Quitar de principales">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </button>
+        <div class="main-card-avatar-wrap">
+          <div class="char-avatar char-avatar-placeholder" id="main-avatar-${char.realmSlug}-${char.name}" style="
+            background: linear-gradient(135deg, ${classColor}33, ${classColor}11);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem; color: ${classColor};
+          ">${getClassEmoji(char.class)}</div>
+        </div>
+        <div class="main-card-info">
+          <div class="main-card-name">${char.name}</div>
+          <div class="main-card-meta">${char.race}</div>
+          <span class="char-class" id="main-badge-${char.realmSlug}-${char.name}" style="color: ${classColor}; border: 1px solid ${classColor}44; background: ${classColor}15;">
+            ${getClassShort(char.class)}
+          </span>
+          <div class="main-card-realm">${char.realm}</div>
+        </div>
+        <span class="main-card-level">${char.level}</span>
+        <span class="char-ilvl" id="main-ilvl-${char.realmSlug}-${char.name}"></span>
+      </div>`;
+  }).join('');
+
+  // Also load avatars for mains
+  loadMainAvatars(mains);
+}
+
+async function loadMainAvatars(mains) {
+  for (const char of mains) {
+    try {
+      const [mediaRes, detailRes] = await Promise.all([
+        fetch(`/api/character/${char.realmSlug}/${char.name.toLowerCase()}/media`, { cache: "no-store" }),
+        fetch(`/api/character/${char.realmSlug}/${char.name.toLowerCase()}`, { cache: "no-store" })
+      ]);
+
+      if (mediaRes.ok) {
+        const media = await mediaRes.json();
+        const avatarAsset = media.assets?.find(a => a.key === 'inset') ||
+                            media.assets?.find(a => a.key === 'avatar') ||
+                            media.assets?.[0];
+        if (avatarAsset?.value) {
+          const placeholder = document.getElementById(`main-avatar-${char.realmSlug}-${char.name}`);
+          if (placeholder) {
+            const img = document.createElement('img');
+            img.src = avatarAsset.value;
+            img.alt = char.name;
+            img.className = 'char-avatar char-avatar-img';
+            img.onload = () => { placeholder.replaceWith(img); };
+          }
+        }
+      }
+
+      if (detailRes.ok) {
+        const detail = await detailRes.json();
+        const ilvl = detail.equipped_item_level || detail.average_item_level;
+        if (ilvl) {
+          const ilvlEl = document.getElementById(`main-ilvl-${char.realmSlug}-${char.name}`);
+          if (ilvlEl) {
+            ilvlEl.textContent = ilvl;
+            ilvlEl.title = 'Item Level';
+          }
+        }
+        // Spec + Short Class Combined
+        const specName = detail.active_spec?.name;
+        if (specName) {
+          const badgeEl = document.getElementById(`main-badge-${char.realmSlug}-${char.name}`);
+          if (badgeEl) badgeEl.textContent = `${getClassShort(char.class)} - ${specName}`;
+        }
+      }
+    } catch (err) { /* keep placeholder */ }
+  }
+}
+
+function getClassEmoji(className) {
+  return "";
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════
+function updateStats() {
+  statTotal.textContent = allCharacters.length;
+  statMaxLevel.textContent =
+    allCharacters.length > 0
+      ? Math.max(...allCharacters.map((c) => c.level))
+      : 0;
+  statAlliance.textContent = allCharacters.filter(
+    (c) => c.faction === "ALLIANCE",
+  ).length;
+  statHorde.textContent = allCharacters.filter(
+    (c) => c.faction === "HORDE",
+  ).length;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// CHARACTER DETAIL MODAL
+// ═══════════════════════════════════════════════════════════
+async function openCharDetail(realmSlug, charName) {
+  charModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  // Reset
+  $('#modal-name').textContent = charName;
+  $('#modal-avatar').src = '';
+  $('#modal-avatar').style.display = 'none';
+  $('#modal-portrait-placeholder').style.display = 'flex';
+  $('#modal-level').textContent = 'Nivel —';
+  $('#modal-ilvl-header').textContent = '—';
+  $('#modal-faction').textContent = '—';
+  $('#modal-faction').className = 'tag';
+  $('#modal-race').textContent = '—';
+  $('#modal-class').textContent = '—';
+  $('#modal-spec').textContent = '—';
+  $('#modal-realm').textContent = '—';
+  $('#modal-achievements').textContent = '—';
+  $('#modal-last-login').textContent = '—';
+  $('#modal-equipment').innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Cargando equipo...</p>';
+
+  // Fetch character details
+  try {
+    const res = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const char = await res.json();
+
+    $('#modal-name').textContent = char.active_title?.display_string?.replace('{name}', char.name) || char.name || charName;
+    $('#modal-level').textContent = `Nivel ${char.level || '—'}`;
+
+    if (char.equipped_item_level) {
+      $('#modal-ilvl-header').textContent = char.equipped_item_level;
+    } else if (char.average_item_level) {
+      $('#modal-ilvl-header').textContent = char.average_item_level;
+    }
+
+    const classColor = CLASS_COLORS[char.character_class?.name] || '#d4a843';
+
+    // Faction tag
+    const factionType = char.faction?.type || '';
+    const factionEl = $('#modal-faction');
+    factionEl.textContent = char.faction?.name || '—';
+    if (factionType === 'ALLIANCE') {
+      factionEl.className = 'tag tag-alliance';
+    } else if (factionType === 'HORDE') {
+      factionEl.className = 'tag tag-horde';
+    }
+
+    // Apply class color to name
+    $('#modal-name').style.color = classColor;
+
+    $('#modal-race').textContent = char.race?.name || '—';
+    $('#modal-class').textContent = getClassShort(char.character_class?.name) || '—';
+    $('#modal-spec').textContent = char.active_spec?.name || '—';
+    $('#modal-realm').textContent = char.realm?.name || '—';
+    $('#modal-achievements').textContent = char.achievement_points || '—';
+
+    if (char.last_login_timestamp) {
+      const date = new Date(char.last_login_timestamp);
+      $('#modal-last-login').textContent = date.toLocaleDateString('es-ES', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      });
+    }
+
+    // Load Class, Race, Spec Icons
+    loadModalIcons(char);
+
+  } catch (err) {
+    console.error('Error loading character details:', err);
+    $('#modal-title').textContent = 'No se pudieron cargar los detalles';
+  }
+
+  // Fetch portrait (prefer main-render or inset for large display)
+  try {
+    const mediaRes = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/media`, { cache: "no-store" });
+    if (mediaRes.ok) {
+      const media = await mediaRes.json();
+      const portraitAsset = media.assets?.find(a => a.key === 'main-raw') ||
+                            media.assets?.find(a => a.key === 'inset') ||
+                            media.assets?.find(a => a.key === 'avatar') ||
+                            media.assets?.[0];
+      if (portraitAsset?.value) {
+        const img = $('#modal-avatar');
+        img.src = portraitAsset.value;
+        img.onload = () => {
+          img.style.display = 'block';
+          $('#modal-portrait-placeholder').style.display = 'none';
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Error loading portrait:', err);
+  }
+
+  // Fetch equipment
+  try {
+    const equipRes = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/equipment`, { cache: "no-store" });
+    if (equipRes.ok) {
+      const equipData = await equipRes.json();
+      renderEquipment(equipData);
+    } else {
+      $('#modal-equipment').innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Equipo no disponible</p>';
+    }
+  } catch (err) {
+    $('#modal-equipment').innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Error al cargar equipo</p>';
+  }
+
+  // Fetch PvE Progress (Raids & M+)
+  loadPvEProgress(realmSlug, charName);
+
+  // Friend button logic
+  const friendBtn = $('#modal-btn-friend');
+  const characterKey = `${realmSlug}|${charName.toLowerCase()}`;
+  const isOwned = allCharacters.some(c => getCharKey(c).toLowerCase() === characterKey);
+  
+  if (isOwned) {
+    friendBtn.classList.add('hidden');
+  } else {
+    friendBtn.classList.remove('hidden');
+  }
+
+  const isFriend = friendChars.some(f => f.realm === realmSlug && f.name.toLowerCase() === charName.toLowerCase());
+  
+  if (isFriend) {
+    friendBtn.classList.add('active');
+    friendBtn.querySelector('span').textContent = 'Siguiendo';
+  } else {
+    friendBtn.classList.remove('active');
+    friendBtn.querySelector('span').textContent = 'Seguir';
+  }
+
+  // Remove old listeners to avoid multiple calls
+  const newFriendBtn = friendBtn.cloneNode(true);
+  friendBtn.parentNode.replaceChild(newFriendBtn, friendBtn);
+  
+  newFriendBtn.addEventListener('click', () => {
+    toggleFriend(realmSlug, charName);
+    const active = newFriendBtn.classList.toggle('active');
+    newFriendBtn.querySelector('span').textContent = active ? 'Siguiendo' : 'Seguir';
+  });
+}
+
+async function loadModalIcons(char) {
+  const raceWrap = $('#modal-race-icon-wrap');
+  const classWrap = $('#modal-class-icon-wrap');
+  const specWrap = $('#modal-spec-icon-wrap');
+
+  // Reset
+  raceWrap.innerHTML = '';
+  classWrap.innerHTML = '';
+  specWrap.innerHTML = '';
+
+  const fetchIcon = async (type, id, container) => {
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/media/${type}/${id}`, { cache: "no-store" });
+      if (res.ok) {
+        const media = await res.json();
+        const asset = media.assets?.find(a => a.key === 'icon' || a.key === 'portrait') || media.assets?.[0];
+        if (asset?.value) {
+          container.innerHTML = `<img src="${asset.value}" alt="${type}">`;
+          container.style.display = 'flex'; // Ensure it shows
+        }
+      } else {
+        console.warn(`No media found for ${type} ${id}`);
+      }
+    } catch (e) { 
+      console.error(`Error loading ${type} icon:`, e); 
+    }
+  };
+
+  // Parallel fetch
+  await Promise.all([
+    char.race?.id ? fetchIcon('playable-race', char.race.id, raceWrap) : Promise.resolve(),
+    char.character_class?.id ? fetchIcon('playable-class', char.character_class.id, classWrap) : Promise.resolve(),
+    char.active_spec?.id ? fetchIcon('playable-specialization', char.active_spec.id, specWrap) : Promise.resolve()
+  ]);
+}
+
+async function loadPvEProgress(realmSlug, charName) {
+  const raidsContainer = $('#modal-raids-container');
+  const mplusScore = $('#modal-mplus-score');
+  
+  // Reset PvE UI to loading state
+  raidsContainer.innerHTML = '<p class="loading-text" style="color:var(--text-muted); font-size:0.8rem; text-align:center;">Analizando encuentros...</p>';
+  mplusScore.classList.add('hidden');
+  mplusScore.style.background = ''; // Reset background
+
+  // Fetch M+ Rating
+  try {
+    const mplusRes = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/mythic-plus`, { cache: "no-store" });
+    if (mplusRes.ok) {
+      const data = await mplusRes.json();
+      const rating = Math.round(data.current_mythic_rating?.rating || 0);
+      if (rating > 0) {
+        mplusScore.textContent = `Rating M+ ${rating}`;
+        mplusScore.classList.remove('hidden');
+        // Color coding for score
+        if (rating >= 2500) mplusScore.style.background = 'linear-gradient(135deg, #ff8000, #d94000)';
+        else if (rating >= 2000) mplusScore.style.background = 'linear-gradient(135deg, #a330c9, #7124a3)';
+        else if (rating >= 1500) mplusScore.style.background = 'linear-gradient(135deg, #0070dd, #004a91)';
+        else mplusScore.style.background = 'linear-gradient(135deg, #1eff00, #14a300)';
+      }
+    }
+  } catch (err) { console.error('Error loading M+:', err); }
+
+  // Fetch Raids
+  try {
+    const raidsRes = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/raids`, { cache: "no-store" });
+    if (raidsRes.ok) {
+      const data = await raidsRes.json();
+      renderRaidProgress(data);
+    } else {
+      raidsContainer.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Sin datos de banda disponibles</p>';
+    }
+  } catch (err) { 
+    console.error('Error loading raids:', err);
+    raidsContainer.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Error al conectar con la base de datos de raids</p>';
+  }
+}
+
+function renderRaidProgress(data) {
+  const container = $('#modal-raids-container');
+  
+  // Filter for the most recent expansion (TWW) or just get the latest entries
+  // The structure is expansions -> instances -> modes -> progress
+  let allInstances = [];
+  if (data.expansions) {
+    data.expansions.forEach(exp => {
+      exp.instances.forEach(inst => {
+        allInstances.push(inst);
+      });
+    });
+  }
+
+  // We want the last 2 raids (most relevant)
+  const recentRaids = allInstances.slice(-2).reverse();
+
+  if (recentRaids.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Sin bandas registradas</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  recentRaids.forEach(raid => {
+    const row = document.createElement('div');
+    row.className = 'raid-row';
+    
+    // Sort modes by difficulty (Normal -> Heroic -> Mythic)
+    // Sometimes modes is undefined or empty
+    if (!raid.modes || raid.modes.length === 0) return;
+
+    const sortedModes = raid.modes.sort((a, b) => {
+      const order = { 'NORMAL': 1, 'HEROIC': 2, 'MYTHIC': 3 };
+      return (order[a.difficulty.type] || 0) - (order[b.difficulty.type] || 0);
+    });
+
+    const difficultiesMap = sortedModes.map(mode => {
+      const type = mode.difficulty.type;
+      const label = type.substring(0, 1);
+      
+      // Safety check for progress
+      const current = mode.progress?.completed_count ?? 0;
+      const total = mode.progress?.total_count ?? 0;
+      
+      return `
+        <span class="diff-badge diff-${type.toLowerCase()}" title="${mode.difficulty.name}">
+          ${label} ${current}/${total}
+        </span>
+      `;
+    }).join('');
+
+    // Progress bar based on highest completion percentage among difficulties
+    const pcts = raid.modes.map(m => {
+      if (!m.progress || !m.progress.total_count) return 0;
+      return (m.progress.completed_count / m.progress.total_count) * 100;
+    });
+    const maxPct = pcts.length > 0 ? Math.max(...pcts) : 0;
+
+    row.innerHTML = `
+      <div class="raid-info">
+        <span class="raid-name">${raid.instance.name}</span>
+        <div class="raid-difficulties">
+          ${difficultiesMap}
+        </div>
+      </div>
+      <div class="raid-progress-bar">
+        <div class="raid-progress-fill" style="width: ${maxPct}%"></div>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+
+function renderEquipment(data) {
+  const equipGrid = $('#modal-equipment');
+
+  if (!data.equipped_items || data.equipped_items.length === 0) {
+    equipGrid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Sin equipo</p>';
+    return;
+  }
+
+  equipGrid.innerHTML = data.equipped_items.map(item => {
+    const qualityClass = QUALITY_CLASSES[item.quality?.type] || 'quality-common';
+    const itemName = item.name || '—';
+    const ilvl = item.level?.value || '';
+    const itemMediaId = item.media?.id || '';
+
+    // Enchantments — show only name + tier
+    const enchants = [];
+    if (item.enchantments) {
+      item.enchantments.forEach(e => {
+        // Only player-applied enchants
+        if (e.enchantment_slot?.type && !['PERMANENT','BONUS_SOCKETS'].includes(e.enchantment_slot.type)) return;
+
+        let label = '';
+        // Prefer source item name (clean name)
+        if (e.source_item?.name) {
+          label = e.source_item.name;
+        } else if (e.display_string) {
+          // Fallback: extract just the effect name
+          label = e.display_string
+            .replace(/^.*?:\s*/, '')  // remove prefix like "A: "
+            .replace(/\|.*$/, '')     // remove anything after |
+            .trim();
+        }
+        if (!label) return;
+
+        enchants.push(label);
+      });
+    }
+
+    // Sockets / Gems
+    const gems = [];
+    if (item.sockets) {
+      item.sockets.forEach(s => {
+        if (s.item?.name) gems.push(s.item.name);
+        else if (s.socket_type?.name) gems.push(`${s.socket_type.name} vacío`);
+      });
+    }
+
+    const enchantHtml = enchants.map(e => `<span class="equip-enchant">${e}</span>`).join('');
+    const gemHtml = gems.map(g => `<span class="equip-gem">${g}</span>`).join('');
+    const extrasHtml = (enchantHtml || gemHtml) ? `<div class="equip-extras">${enchantHtml}${gemHtml}</div>` : '';
+
+    return `
+      <div class="equip-item">
+        <div class="equip-icon-wrap" ${itemMediaId ? `data-item-id="${itemMediaId}"` : ''}>
+          <div class="equip-icon-placeholder"></div>
+        </div>
+        <div class="equip-details">
+          <span class="equip-name ${qualityClass}">${itemName}</span>
+          ${extrasHtml}
+        </div>
+        ${ilvl ? `<div class="equip-ilvl-container">
+          <span class="equip-ilvl-label">LVL</span>
+          <span class="equip-ilvl-val">${ilvl}</span>
+        </div>` : ''}
+      </div>`;
+  }).join('');
+
+  // Lazy-load item icons
+  loadItemIcons();
+}
+
+async function loadItemIcons() {
+  const iconWraps = document.querySelectorAll('.equip-icon-wrap[data-item-id]');
+  for (const wrap of iconWraps) {
+    const itemId = wrap.dataset.itemId;
+    if (!itemId) continue;
+    try {
+      const res = await fetch(`/api/item/${itemId}/media`, { cache: "no-store" });
+      if (!res.ok) continue;
+      const media = await res.json();
+      const iconAsset = media.assets?.find(a => a.key === 'icon') || media.assets?.[0];
+      if (iconAsset?.value) {
+        const img = document.createElement('img');
+        img.src = iconAsset.value;
+        img.alt = '';
+        img.className = 'equip-icon-img';
+        img.onload = () => {
+          const placeholder = wrap.querySelector('.equip-icon-placeholder');
+          if (placeholder) placeholder.replaceWith(img);
+        };
+      }
+    } catch (err) { /* keep placeholder */ }
+  }
+}
+
+function closeModal() {
+  charModal.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+// ─── Faction Modal ───────────────────────────────────────
+function openFactionModal(faction) {
+  const factionChars = allCharacters.filter(c => c.faction === faction);
+  const total = factionChars.length;
+  
+  if (total === 0) return;
+
+  const factionName = faction === "ALLIANCE" ? "Alianza" : "Horda";
+  const factionColor = faction === "ALLIANCE" ? "var(--alliance-blue)" : "var(--horde-red)";
+  
+  factionModalTitle.textContent = `Reparto de Razas: ${factionName}`;
+  factionModal.style.setProperty('--faction-color', factionColor);
+  
+  // Count races
+  const counts = {};
+  factionChars.forEach(c => {
+    counts[c.race] = (counts[c.race] || 0) + 1;
+  });
+
+  // Sort by count desc
+  const sortedRaces = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  // Render
+  factionStatsList.innerHTML = sortedRaces.map(([race, count]) => {
+    const pct = ((count / total) * 100).toFixed(1);
+    return `
+      <div class="race-stat-item">
+        <div class="race-stat-info">
+          <span class="race-name">${race}</span>
+          <span class="race-percentage">${count} | ${pct}%</span>
+        </div>
+        <div class="race-bar-bg">
+          <div class="race-bar-fill" style="width: ${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  factionModal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeFactionModal() {
+  factionModal.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+// ═══════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════
+function showLoading(show) {
+  loadingSpinner.classList.toggle("hidden", !show);
+  if (show) {
+    charsGrid.innerHTML = "";
+    noResults.classList.add("hidden");
+  }
+}
