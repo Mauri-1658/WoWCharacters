@@ -982,28 +982,59 @@ async function loadModalIcons(char) {
   classWrap.innerHTML = '';
   specWrap.innerHTML = '';
 
-  const fetchIcon = async (type, id, container) => {
-    if (!id) return;
+  const fetchIcon = async (type, id, container, fallbackUrl = '') => {
+    if (!id && !fallbackUrl) return;
     try {
-      const res = await fetch(`/api/media/${type}/${id}`, { cache: "no-store" });
-      if (res.ok) {
-        const media = await res.json();
-        const asset = media.assets?.find(a => a.key === 'icon' || a.key === 'portrait') || media.assets?.[0];
-        if (asset?.value) {
-          container.innerHTML = `<img src="${asset.value}" alt="${type}">`;
-          container.style.display = 'flex'; // Ensure it shows
+      if (id) {
+        const res = await fetch(`/api/media/${type}/${id}`, { cache: "no-store" });
+        if (res.ok) {
+          const media = await res.json();
+          const asset = media.assets?.find(a => a.key === 'icon' || a.key === 'portrait') || media.assets?.[0];
+          if (asset?.value) {
+            container.innerHTML = `<img src="${asset.value}" alt="${type}">`;
+            container.style.display = 'flex';
+            return;
+          }
         }
-      } else {
-        console.warn(`No media found for ${type} ${id}`);
+      }
+      
+      // Use fallback if API fails or no ID provided
+      if (fallbackUrl) {
+        container.innerHTML = `<img src="${fallbackUrl}" alt="${type}">`;
+        container.style.display = 'flex';
       }
     } catch (e) { 
-      console.error(`Error loading ${type} icon:`, e); 
+      console.error(`Error loading ${type} icon:`, e);
+      if (fallbackUrl) {
+        container.innerHTML = `<img src="${fallbackUrl}" alt="${type}">`;
+        container.style.display = 'flex';
+      }
     }
   };
 
+  // Race fallback mapping (Wowhead CDN pattern)
+  const raceMap = {
+    'Human': 'human', 'Orc': 'orc', 'Dwarf': 'dwarf', 'Night Elf': 'nightelf',
+    'Undead': 'scourge', 'Tauren': 'tauren', 'Gnome': 'gnome', 'Troll': 'troll',
+    'Goblin': 'goblin', 'Blood Elf': 'bloodelf', 'Draenei': 'draenei',
+    'Worgen': 'worgen', 'Pandaren': 'pandaren', 'Nightborne': 'nightborne',
+    'Highmountain Tauren': 'highmountain', 'Void Elf': 'voidelf',
+    'Lightforged Draenei': 'lightforged', 'Zandalari Troll': 'zandalari',
+    'Kul Tiran': 'kultiran', 'Dark Iron Dwarf': 'darkiron',
+    'Mag\'har Orc': 'maghar', 'Mechagnome': 'mechagnome', 'Vulpera': 'vulpera',
+    'Dracthyr': 'dracthyr', 'Earthen': 'earthen'
+  };
+  
+  const raceName = char.race?.name;
+  const gender = char.gender?.type?.toLowerCase() || 'male';
+  let raceFallback = '';
+  if (raceName && raceMap[raceName]) {
+    raceFallback = `https://wow.zamimg.com/images/wow/icons/large/race_${raceMap[raceName]}_${gender}.jpg`;
+  }
+
   // Parallel fetch
   await Promise.all([
-    char.race?.id ? fetchIcon('playable-race', char.race.id, raceWrap) : Promise.resolve(),
+    fetchIcon('playable-race', char.race?.id, raceWrap, raceFallback),
     char.character_class?.id ? fetchIcon('playable-class', char.character_class.id, classWrap) : Promise.resolve(),
     char.active_spec?.id ? fetchIcon('playable-specialization', char.active_spec.id, specWrap) : Promise.resolve()
   ]);
