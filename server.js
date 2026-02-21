@@ -413,8 +413,10 @@ app.get("/api/character/:realm/:name/talents", requireAuth, async (req, res) => 
         
         if (s.loadouts) {
           s.loadouts.forEach((l, lIdx) => {
-            console.log(`    Loadout[${lIdx}]: ${l.talent_loadout_selection_display_string} (Active: ${l.is_active})`);
-            if (l.talent_tree_summary) console.log(`      TreeID (Loadout): ${l.talent_tree_summary.id}`);
+            console.log(`    Loadout[${lIdx}]: Active=${l.is_active} Keys=${Object.keys(l).join(', ')}`);
+            if (l.talent_tree_summary) console.log(`      TreeID: ${l.talent_tree_summary.id}`);
+            if (l.hero_talent_tree)   console.log(`      hero_talent_tree: ${JSON.stringify(l.hero_talent_tree)}`);
+            if (l.selected_hero_spec) console.log(`      selected_hero_spec: ${JSON.stringify(l.selected_hero_spec)}`);
           });
         }
       });

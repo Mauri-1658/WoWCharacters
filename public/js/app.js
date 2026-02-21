@@ -847,13 +847,13 @@ async function openCharDetail(realmSlug, charName) {
   $('#modal-ilvl-header').textContent = '—';
   $('#modal-faction').textContent = '—';
   $('#modal-faction').className = 'tag';
-  $('#modal-race').textContent = '—';
-  $('#modal-class').textContent = '—';
-  $('#modal-spec').textContent = '—';
-  $('#modal-realm').textContent = '—';
-  $('#modal-achievements').textContent = '—';
+  $('#modal-race').textContent = '\u2014';
+  $('#modal-class').textContent = '\u2014';
+  $('#modal-spec').textContent = '\u2014';
+  $('#modal-hero-talent').textContent = '\u2014';
+  $('#modal-realm').textContent = '\u2014';
+  $('#modal-achievements').textContent = '\u2014';
   $('#modal-achievements-pct').textContent = '0%';
-  $('#modal-last-login').textContent = '—';
   $('#modal-equipment').innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Cargando equipo...</p>';
 
   // Fetch character details
@@ -886,23 +886,16 @@ async function openCharDetail(realmSlug, charName) {
     // Apply class color to name
     $('#modal-name').style.color = classColor;
 
-    $('#modal-race').textContent = char.race?.name || '—';
-    $('#modal-class').textContent = getClassShort(char.character_class?.name) || '—';
-    $('#modal-spec').textContent = char.active_spec?.name || '—';
-    $('#modal-realm').textContent = char.realm?.name || '—';
+    $('#modal-race').textContent = char.race?.name || '\u2014';
+    $('#modal-class').textContent = getClassShort(char.character_class?.name) || '\u2014';
+    $('#modal-spec').textContent = char.active_spec?.name || '\u2014';
+    $('#modal-realm').textContent = char.realm?.name || '\u2014';
     
     // Achievements
     const points = char.achievement_points || 0;
     $('#modal-achievements').textContent = points.toLocaleString('es-ES');
     const pct = ((points / MAX_ACHIEVEMENT_POINTS) * 100).toFixed(1);
     $('#modal-achievements-pct').textContent = `${pct}%`;
-
-    if (char.last_login_timestamp) {
-      const date = new Date(char.last_login_timestamp);
-      $('#modal-last-login').textContent = date.toLocaleDateString('es-ES', {
-        day: 'numeric', month: 'long', year: 'numeric'
-      });
-    }
 
     // Load Class, Race, Spec Icons
     loadModalIcons(char);
@@ -912,6 +905,36 @@ async function openCharDetail(realmSlug, charName) {
 
     // Fetch Stats
     fetchStats(realmSlug, charName);
+
+    // Fetch Hero Talent (async, non-blocking)
+    fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/talents`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(talentData => {
+        if (!talentData) return;
+        // Find the active loadout and its selected hero spec
+        const activeSpec = talentData.specializations?.find(
+          s => s.specialization?.id === talentData.active_specialization?.id
+        );
+        const activeLoadout = activeSpec?.loadouts?.find(l => l.is_active);
+        const heroSpec = activeLoadout?.selected_hero_spec;
+        if (heroSpec?.name) {
+          $('#modal-hero-talent').textContent = heroSpec.name;
+          // Load hero talent icon via Wowhead CDN (using spec icon as proxy)
+          const heroWrap = $('#modal-hero-talent-icon-wrap');
+          if (heroWrap && heroSpec.id) {
+            const heroIconUrl = `https://wow.zamimg.com/images/wow/icons/large/ability_herospec_${heroSpec.name.toLowerCase().replace(/[^a-z]/g, '')}.jpg`;
+            const img = document.createElement('img');
+            img.alt = heroSpec.name;
+            img.onerror = () => { heroWrap.innerHTML = ''; heroWrap.style.display = 'none'; };
+            img.onload = () => { heroWrap.style.display = 'flex'; };
+            img.src = heroIconUrl;
+            heroWrap.innerHTML = '';
+            heroWrap.appendChild(img);
+          }
+        }
+      })
+      .catch(() => {});
+
 
   } catch (err) {
     console.error('Error loading character details:', err);

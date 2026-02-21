@@ -205,8 +205,3 @@ Proyecto personal / educativo. Este proyecto no está afiliado con **Blizzard En
 Los iconos y recursos de World of Warcraft son propiedad de **© Blizzard Entertainment, Inc.**
 
 ---
-
-<p align="center">
-  <img src="https://render.worldofwarcraft.com/us/icons/56/wow_token01.jpg" width="24">
-  <em>Hecho con ❤️ para la comunidad de World of Warcraft</em>
-</p>
