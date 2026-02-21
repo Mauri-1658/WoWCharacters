@@ -252,7 +252,7 @@
               <span>Talentos</span>
             </button>
           </div>
-          <div class="modal-char-name" id="modal-name">—</div>
+          <div class="modal-char-name" id="modal-name" style="margin-bottom: 0.5rem;">—</div>
           <div class="modal-ilvl-header" id="modal-ilvl-header-container">
             <span class="ilvl-header-label">ILVL</span>
             <span class="ilvl-header-val" id="modal-ilvl-header">—</span>
@@ -324,7 +324,16 @@
 
       <!-- Right Panel: Equipment -->
       <div class="modal-right">
-        <h3 class="modal-section-title">Equipo</h3>
+        <h3 class="modal-section-title" style="display: flex; align-items: center; gap: 0.75rem;">
+          <span>Equipo</span>
+          <a href="#" id="modal-bis-link" target="_blank" class="equip-bis-link hidden" style="margin-top: 0; padding: 0.25rem 0.5rem; transform: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="equip-bis-icon">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            Guía BiS
+          </a>
+        </h3>
         <div class="equipment-grid" id="modal-equipment">
           <!-- Equipment rendered by JS -->
         </div>

@@ -907,6 +907,9 @@ async function openCharDetail(realmSlug, charName) {
     // Load Class, Race, Spec Icons
     loadModalIcons(char);
 
+    // Update Header BiS Link
+    updateBiSLink(char.character_class?.name, char.active_spec?.name);
+
   } catch (err) {
     console.error('Error loading character details:', err);
     $('#modal-title').textContent = 'No se pudieron cargar los detalles';
@@ -1264,6 +1267,18 @@ function renderEquipment(data) {
 
   // Lazy-load item icons
   loadItemIcons();
+}
+
+async function updateBiSLink(className, specName) {
+  const bisLink = $('#modal-bis-link');
+  if (className && specName) {
+    const classSlug = className.toLowerCase().replace(/\s+/g, '-');
+    const specSlug = specName.toLowerCase().replace(/\s+/g, '-');
+    bisLink.href = `https://www.wowhead.com/guide/classes/${classSlug}/${specSlug}/bis-gear`;
+    bisLink.classList.remove('hidden');
+  } else {
+    bisLink.classList.add('hidden');
+  }
 }
 
 async function loadItemIcons() {

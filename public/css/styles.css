@@ -1432,6 +1432,38 @@ body {
   line-height: 1.1;
 }
 
+/* ─── Wowhead BiS Button ────────────────────── */
+.equip-bis-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(212, 168, 67, 0.2);
+  border-radius: 6px;
+  color: var(--gold-light);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  width: fit-content;
+}
+
+.equip-bis-link:hover {
+  background: rgba(212, 168, 67, 0.15);
+  border-color: var(--gold);
+  color: #fff;
+  transform: translateX(3px);
+}
+
+.equip-bis-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+/* ─── Equipment Extras Row Fix ──────────────── */
 .equip-extras {
   display: flex;
   flex-wrap: wrap;

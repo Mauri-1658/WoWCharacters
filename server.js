@@ -172,6 +172,35 @@ app.get("/api/character/:realm/:name", requireAuth, async (req, res) => {
   }
 });
 
+// ─── API: Get Character Statistics ──────────────────────────────
+app.get("/api/character/:realm/:name/stats", requireAuth, async (req, res) => {
+  try {
+    const { realm, name } = req.params;
+    const realmSlug = realm.toLowerCase().replace(/\s+/g, "-");
+    const charName = name.toLowerCase();
+
+    const response = await axios.get(
+      `${API_BASE}/profile/wow/character/${realmSlug}/${charName}/statistics`,
+      {
+        headers: {
+          Authorization: `Bearer ${req.session.accessToken}`,
+          "Cache-Control": "no-cache",
+        },
+        params: {
+          namespace: `profile-${REGION}`,
+          locale: "en_US",
+        },
+      },
+    );
+    res.json(response.data);
+  } catch (err) {
+    console.error("Stats fetch error:", err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: "Failed to fetch character statistics",
+    });
+  }
+});
+
 // ─── API: Get Character Media (Avatar) ──────────────────────────
 app.get("/api/character/:realm/:name/media", requireAuth, async (req, res) => {
   try {
