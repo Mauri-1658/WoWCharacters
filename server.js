@@ -348,6 +348,83 @@ app.get("/api/character/:realm/:name/mythic-plus", requireAuth, async (req, res)
   }
 });
 
+// ─── API: Get Character Talents/Specializations ─────────────────
+app.get("/api/character/:realm/:name/talents", requireAuth, async (req, res) => {
+  console.log(`[Talents] Request for ${req.params.realm}/${req.params.name}`);
+  try {
+    const { realm, name } = req.params;
+    const realmSlug = realm.toLowerCase().replace(/\s+/g, "-");
+    const charName = name.toLowerCase();
+
+    const response = await axios.get(
+      `${API_BASE}/profile/wow/character/${realmSlug}/${charName}/specializations`,
+      {
+        headers: {
+          Authorization: `Bearer ${req.session.accessToken}`,
+          "Cache-Control": "no-cache",
+        },
+        params: {
+          namespace: `profile-${REGION}`,
+          locale: "en_US",
+        },
+      },
+    );
+
+    // DEBUG: Log the structure
+    console.log(`[Talents DEBUG] Status: ${response.status} for ${charName}`);
+    const data = response.data;
+    if (data.specializations) {
+      data.specializations.forEach((s, idx) => {
+        const isCurrent = s.specialization?.id === data.active_specialization?.id;
+        console.log(`  Spec[${idx}]: ${s.specialization?.name} ${isCurrent ? '[ACTIVE]' : ''}`);
+        console.log(`    Keys: ${Object.keys(s).join(', ')}`);
+        if (s.talent_tree_summary) console.log(`    TreeID (Root): ${s.talent_tree_summary.id}`);
+        
+        if (s.loadouts) {
+          s.loadouts.forEach((l, lIdx) => {
+            console.log(`    Loadout[${lIdx}]: ${l.talent_loadout_selection_display_string} (Active: ${l.is_active})`);
+            if (l.talent_tree_summary) console.log(`      TreeID (Loadout): ${l.talent_tree_summary.id}`);
+          });
+        }
+      });
+    }
+
+    res.json(response.data);
+  } catch (err) {
+    console.error("Talents fetch error:", err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: "Failed to fetch talents",
+    });
+  }
+});
+
+// ─── API: Get Static Talent Tree Layout ────────────────────────
+app.get("/api/talent-tree/:treeId/:specId", requireAuth, async (req, res) => {
+  console.log(`[TalentTree] Tree:${req.params.treeId} Spec:${req.params.specId}`);
+  try {
+    const { treeId, specId } = req.params;
+    const response = await axios.get(
+      `${API_BASE}/data/wow/talent-tree/${treeId}/playable-specialization/${specId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${req.session.accessToken}`,
+          "Cache-Control": "no-cache",
+        },
+        params: {
+          namespace: `static-${REGION}`,
+          locale: "en_US",
+        },
+      },
+    );
+    res.json(response.data);
+  } catch (err) {
+    console.error("Talent tree fetch error:", err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: "Failed to fetch talent tree structure",
+    });
+  }
+});
+
 // ─── API: Get Item Media (Icon) ─────────────────────────────────
 app.get("/api/item/:itemId/media", requireAuth, async (req, res) => {
   try {
@@ -395,6 +472,31 @@ app.get("/api/media/:type/:id", requireAuth, async (req, res) => {
     res.status(err.response?.status || 500).json({
       error: "Failed to fetch media",
       details: err.response?.data || err.message,
+    });
+  }
+});
+
+// ─── API: Get Playable Specialization Data (Fallback for TreeID) ──
+app.get("/api/specialization/:specId", requireAuth, async (req, res) => {
+  try {
+    const { specId } = req.params;
+    const response = await axios.get(
+      `${API_BASE}/data/wow/playable-specialization/${specId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${req.session.accessToken}`,
+          "Cache-Control": "no-cache",
+        },
+        params: {
+          namespace: `static-${REGION}`,
+          locale: "en_US",
+        },
+      },
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({
+      error: "Failed to fetch specialization data",
     });
   }
 });

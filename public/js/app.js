@@ -136,6 +136,13 @@ const factionModalTitle = $("#faction-modal-title");
 const factionStatsList = $("#faction-stats-list");
 const factionModalOverlay = factionModal.querySelector(".modal-overlay");
 
+// Talent Modal
+const talentModal = $("#talent-modal");
+const talentModalOverlay = $("#talent-modal-overlay");
+const talentModalClose = $("#talent-modal-close");
+const talentTreeContainer = $("#talent-tree-container");
+const talentBtnInDetail = $("#modal-btn-talents");
+
 // ═══════════════════════════════════════════════════════════
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════
@@ -184,10 +191,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   factionModalClose.addEventListener("click", closeFactionModal);
   factionModalOverlay.addEventListener("click", closeFactionModal);
 
+  // Talent modal events
+  talentModalClose.addEventListener("click", closeTalentModal);
+  talentModalOverlay.addEventListener("click", closeTalentModal);
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeModal();
       closeFactionModal();
+      closeTalentModal();
     }
   });
 
@@ -949,6 +961,15 @@ async function openCharDetail(realmSlug, charName) {
     friendBtn.classList.remove('hidden');
   }
 
+  // Talents button logic
+  const talentBtn = $('#modal-btn-talents');
+  // Replace listener
+  const newTalentBtn = talentBtn.cloneNode(true);
+  talentBtn.parentNode.replaceChild(newTalentBtn, talentBtn);
+  newTalentBtn.addEventListener('click', () => {
+    openTalentModal(realmSlug, charName);
+  });
+
   const isFriend = friendChars.some(f => f.realm === realmSlug && f.name.toLowerCase() === charName.toLowerCase());
   
   if (isFriend) {
@@ -1318,7 +1339,197 @@ function openFactionModal(faction) {
 
 function closeFactionModal() {
   factionModal.classList.add("hidden");
-  document.body.style.overflow = "";
+  if (charModal.classList.contains('hidden')) {
+    document.body.style.overflow = "";
+  }
+}
+
+// ─── Talent Modal ────────────────────────────────────────
+async function openTalentModal(realmSlug, charName) {
+  talentModal.classList.remove('hidden');
+  document.body.style.overflow = "hidden";
+  $("#talent-modal-char-name").textContent = `Talentos: ${charName}`;
+  talentTreeContainer.innerHTML = `
+    <div class="talent-loading">
+      <div class="spinner"></div>
+      <p>Consultando el Códice de Talentos...</p>
+    </div>
+  `;
+
+  // Helper to handle non-json errors
+  const checkResponse = async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      let errorMsg = `HTTP ${res.status}`;
+      try {
+        const json = JSON.parse(text);
+        if (json.error) errorMsg = json.error;
+      } catch(e) {
+        // Not JSON, probably HTML 404
+        if (text.includes('<!DOCTYPE') || text.includes('Cannot GET')) {
+          errorMsg = `Ruta no encontrada (404). ¿Has reiniciado el servidor?`;
+        } else {
+          errorMsg = text.substring(0, 100);
+        }
+      }
+      throw new Error(errorMsg);
+    }
+    return res.json();
+  };
+
+  try {
+    const data = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/talents`).then(checkResponse);
+    
+    if (!data.specializations) throw new Error("Datos de especialización no encontrados");
+    
+    const activeSpec = data.specializations.find(s => s.specialization.id === data.active_specialization?.id) || data.specializations[0];
+    if (!activeSpec) throw new Error("No se encontró información de la especialización");
+    
+    const activeLoadout = activeSpec.loadouts?.find(l => l.is_active) || activeSpec.loadouts?.[0];
+    if (!activeLoadout) throw new Error("El personaje no tiene una configuración de talentos (loadout) guardada");
+
+    const specId = activeSpec.specialization.id;
+    const specName = activeSpec.specialization.name;
+    
+    // Check treeId in various locations
+    let treeId = activeSpec.talent_tree_summary?.id || activeLoadout?.talent_tree_summary?.id;
+
+    // FALLBACK: If treeId is still missing, try to fetch it from Specialization static data
+    if (!treeId && specId) {
+      console.log(`[Talents] TreeID missing in profile, attempting specialization fallback for SpecID: ${specId}`);
+      try {
+        const specMeta = await fetch(`/api/specialization/${specId}`).then(checkResponse);
+        treeId = specMeta.talent_tree_summary?.id;
+      } catch (e) {
+        console.warn("Fallback specialization fetch failed:", e);
+      }
+    }
+
+    $("#talent-modal-spec-info").textContent = `${specName} — ${activeLoadout?.talent_loadout_selection_display_string || 'Configuración Activa'}`;
+
+    if (!treeId) {
+      console.warn("Talent Tree ID not found after fallbacks:", activeSpec);
+      talentTreeContainer.innerHTML = `
+        <div class="talent-loading">
+          <p>Este personaje no posee un árbol de talentos compatible o la API de Blizzard no está proporcionando los datos necesarios.</p>
+          <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Especialización detectada: ${specName} (ID: ${specId})</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Check if we have selected talents
+    const hasTalentData = activeLoadout && activeLoadout.selected_talents && activeLoadout.selected_talents.length > 0;
+    if (!hasTalentData) {
+      console.warn("No selected_talents found in activeLoadout. API might be missing data.");
+      // We still proceed to render the tree, but it will be "empty" (no active nodes)
+    }
+
+    const treeData = await fetch(`/api/talent-tree/${treeId}/${specId}`).then(checkResponse);
+    renderTalentTree(treeData, activeLoadout || {});
+
+    // If talent data was missing, show a warning badge
+    if (!hasTalentData) {
+      const warning = document.createElement('div');
+      warning.style = 'position:absolute; top:1rem; right:1rem; background:rgba(217, 83, 79, 0.2); border:1px solid #d9534f; color:#ffbaba; padding:0.5rem 1rem; border-radius:8px; font-size:0.8rem; z-index:100; max-width:250px;';
+      warning.innerHTML = '<strong>Nota:</strong> Los talentos seleccionados no están disponibles en la API de Blizzard en este momento (Parche 11.x). Mostrando árbol base.';
+      talentTreeContainer.appendChild(warning);
+    }
+
+  } catch (err) {
+    console.error("Talent modal error:", err);
+    talentTreeContainer.innerHTML = `
+      <div class="talent-loading">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="margin-bottom:1rem; opacity:0.5; color:#ff4444;">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p style="color:#ffbaba; font-weight:600;">Ocurrió un error al invocar los talentos</p>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">${err.message}</p>
+        <button class="btn-toggle-filters active" style="margin-top:1.5rem; background:rgba(255,255,255,0.1);" onclick="closeTalentModal()">Cerrar</button>
+      </div>`;
+  }
+}
+
+function closeTalentModal() {
+  talentModal.classList.add('hidden');
+  // Only restore scroll if main modal is also closed
+  if (charModal.classList.contains('hidden')) {
+    document.body.style.overflow = "";
+  }
+}
+
+async function renderTalentTree(treeData, activeLoadout) {
+  talentTreeContainer.innerHTML = '';
+  
+  // Create a map of active talent IDs and ranks
+  const activeTalentIds = new Set();
+  const talentRanks = {};
+
+  if (activeLoadout.selected_talents) {
+    activeLoadout.selected_talents.forEach(t => {
+      const id = t.tooltip.talent.id;
+      activeTalentIds.add(id);
+      talentRanks[id] = t.rank;
+    });
+  }
+
+  // Combine class and spec nodes
+  const nodes = (treeData.class_talent_nodes || []).concat(treeData.spec_talent_nodes || []);
+  
+  // Find bounds to shift coordinates if needed (Blizzard coords start around 100/100)
+  const minRow = Math.min(...nodes.map(n => n.display_row));
+  const minCol = Math.min(...nodes.map(n => n.display_col));
+
+  nodes.forEach(node => {
+    if (typeof node.display_row !== 'number' || typeof node.display_col !== 'number') return;
+
+    const el = document.createElement('div');
+    el.className = 'talent-node';
+    
+    // Map coords: 100 approx units per row/col
+    // We adjust to be 1-indexed for CSS Grid
+    const row = Math.floor((node.display_row - minRow) / 60) + 1;
+    const col = Math.floor((node.display_col - minCol) / 60) + 1;
+    
+    el.style.gridRow = row;
+    el.style.gridColumn = col;
+
+    // Check talent entries
+    const talentEntry = node.talents?.[0];
+    if (talentEntry) {
+      const talentId = talentEntry.talent.id;
+      const isActive = activeTalentIds.has(talentId);
+      if (isActive) el.classList.add('active');
+      
+      el.setAttribute('data-name', talentEntry.talent.name);
+      
+      // Rank indicator
+      if (isActive && talentRanks[talentId] > 0) {
+        const rankSpan = document.createElement('span');
+        rankSpan.className = 'talent-rank';
+        rankSpan.textContent = talentRanks[talentId];
+        el.appendChild(rankSpan);
+      }
+
+      // Symbol
+      if (node.node_type?.type === 'CHOICE') el.classList.add('choice');
+
+      // Fetch Icon via proxy
+      fetch(`/api/media/talent/${talentId}`)
+        .then(res => res.json())
+        .then(media => {
+          const asset = media.assets?.find(a => a.key === 'icon') || media.assets?.[0];
+          if (asset?.value) {
+            const img = document.createElement('img');
+            img.src = asset.value;
+            img.alt = talentEntry.talent.name;
+            el.appendChild(img);
+          }
+        }).catch(() => {});
+    }
+
+    talentTreeContainer.appendChild(el);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════

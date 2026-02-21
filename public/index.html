@@ -244,6 +244,13 @@
               </svg>
               <span>Favorito</span>
             </button>
+            <!-- Talents button -->
+            <button class="modal-action-btn" id="modal-btn-talents" title="Ver árbol de talentos">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+              <span>Talentos</span>
+            </button>
           </div>
           <div class="modal-char-name" id="modal-name">—</div>
           <div class="modal-ilvl-header" id="modal-ilvl-header-container">
@@ -326,7 +333,30 @@
     </div>
   </div>
 
-    <!-- Faction Stats Modal -->
+    <!-- ═══ TALENT TREE MODAL ═══ -->
+  <div id="talent-modal" class="modal hidden">
+    <div class="modal-overlay" id="talent-modal-overlay"></div>
+    <div class="modal-content talent-modal-content">
+      <button class="modal-close" id="talent-modal-close">✕</button>
+      
+      <div class="talent-modal-header">
+        <div class="talent-header-info">
+          <h2 id="talent-modal-char-name">Árbol de Talentos</h2>
+          <p id="talent-modal-spec-info">—</p>
+        </div>
+      </div>
+
+      <div id="talent-tree-container" class="talent-tree-container">
+        <!-- The talent tree will be rendered as a grid of nodes here -->
+        <div class="talent-loading">
+          <div class="spinner"></div>
+          <p>Cargando talentos...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Faction Stats Modal -->
     <div id="faction-modal" class="modal hidden">
       <div class="modal-overlay"></div>
       <div class="modal-content faction-modal-content">
