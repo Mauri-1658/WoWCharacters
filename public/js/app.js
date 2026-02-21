@@ -910,6 +910,9 @@ async function openCharDetail(realmSlug, charName) {
     // Update Header BiS Link
     updateBiSLink(char.character_class?.name, char.active_spec?.name);
 
+    // Fetch Stats
+    fetchStats(realmSlug, charName);
+
   } catch (err) {
     console.error('Error loading character details:', err);
     $('#modal-title').textContent = 'No se pudieron cargar los detalles';
@@ -1278,6 +1281,58 @@ async function updateBiSLink(className, specName) {
     bisLink.classList.remove('hidden');
   } else {
     bisLink.classList.add('hidden');
+  }
+}
+
+async function fetchStats(realmSlug, charName) {
+  const statsContainer = $('#modal-attributes-section');
+  if (!statsContainer) return;
+
+  try {
+    const res = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/stats`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      renderStats(data);
+    } else {
+      statsContainer.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Estadísticas no disponibles</p>';
+    }
+  } catch (err) {
+    console.error('Error loading stats:', err);
+    statsContainer.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Error al cargar estadísticas</p>';
+  }
+}
+
+function renderStats(data) {
+  const container = $('#modal-attributes-section');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const statGroups = [
+    { label: 'Fuerza', value: data.strength?.effective, type: 'primary' },
+    { label: 'Agilidad', value: data.agility?.effective, type: 'primary' },
+    { label: 'Intelecto', value: data.intellect?.effective, type: 'primary' },
+    { label: 'Aguante', value: data.stamina?.effective, type: 'primary' },
+    { label: 'Crítico', value: `${data.melee_crit?.value?.toFixed(1)}%`, type: 'secondary' },
+    { label: 'Celeridad', value: `${data.melee_haste?.value?.toFixed(1)}%`, type: 'secondary' },
+    { label: 'Maestría', value: `${data.mastery?.value?.toFixed(1)}%`, type: 'secondary' },
+    { label: 'Versatilidad', value: `${data.versatility_value?.toFixed(1)}%`, type: 'secondary' }
+  ];
+
+  statGroups.forEach(stat => {
+    // Show stats if they have a non-zero value
+    if (!stat.value || stat.value === '0.0%' || stat.value === 0) return;
+
+    const box = document.createElement('div');
+    box.className = `attr-box ${stat.type}`;
+    box.innerHTML = `
+      <span class="attr-box-label">${stat.label}</span>
+      <span class="attr-box-value">${stat.value}</span>
+    `;
+    container.appendChild(box);
+  });
+
+  if (container.innerHTML === '') {
+    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">Sin datos de estadísticas relevantes</p>';
   }
 }
 

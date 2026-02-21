@@ -179,6 +179,7 @@ app.get("/api/character/:realm/:name/stats", requireAuth, async (req, res) => {
     const realmSlug = realm.toLowerCase().replace(/\s+/g, "-");
     const charName = name.toLowerCase();
 
+    console.log(`[*] Fetching stats for ${charName} on ${realmSlug}...`);
     const response = await axios.get(
       `${API_BASE}/profile/wow/character/${realmSlug}/${charName}/statistics`,
       {
@@ -192,6 +193,7 @@ app.get("/api/character/:realm/:name/stats", requireAuth, async (req, res) => {
         },
       },
     );
+    console.log(`[OK] Stats received for ${charName}`);
     res.json(response.data);
   } catch (err) {
     console.error("Stats fetch error:", err.response?.data || err.message);

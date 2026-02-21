@@ -1432,6 +1432,59 @@ body {
   line-height: 1.1;
 }
 
+/* ─── Attributes Grid ────────────────────────── */
+.modal-attributes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.attr-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: all 0.3s ease;
+}
+
+.attr-box:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(212, 168, 67, 0.3);
+}
+
+.attr-box.primary {
+  border-left: 3px solid var(--gold);
+}
+
+.attr-box.secondary {
+  border-left: 3px solid var(--purple);
+}
+
+.attr-box-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.attr-box-value {
+  font-family: "Cinzel", serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.attr-box-pct {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 /* ─── Wowhead BiS Button ────────────────────── */
 .equip-bis-link {
   display: flex;
