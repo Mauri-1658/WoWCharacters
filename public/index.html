@@ -50,12 +50,18 @@
         <img src="https://render.worldofwarcraft.com/us/icons/56/wow_token01.jpg" alt="WoW" width="28" height="28" style="border-radius:6px; flex-shrink:0; box-shadow:0 0 8px rgba(212,168,67,0.4);" onerror="this.style.display='none'">
         <h1 class="topbar-logo">WoWCharacters</h1>
       </div>
-      <div class="topbar-center">
-        <div class="search-box">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input type="text" id="search-input" placeholder="Buscar personaje..." autocomplete="off">
+      <div class="topbar-center" style="display:flex; align-items:center; gap:1rem;">
+        <div class="stat-item stat-horde" id="stat-item-horde" title="Ver reparto de razas Horda" style="display:flex; flex-direction:row; align-items:center; gap:0.4rem; padding:0 0.9rem; height:32px; box-sizing:border-box; min-width:90px; justify-content:center; border-radius:8px;">
+          <span class="stat-value" id="stat-horde" style="font-size:0.95rem;">0</span>
+          <span class="stat-label" style="font-size:0.7rem;">Horda</span>
+        </div>
+        <div class="stat-item" style="display:flex; flex-direction:row; align-items:center; gap:0.4rem; padding:0 0.9rem; height:32px; box-sizing:border-box; min-width:90px; justify-content:center; background:rgba(255,255,255,0.06); border-radius:8px; cursor:default;">
+          <span class="stat-value" id="stat-total" style="font-size:0.95rem;">0</span>
+          <span class="stat-label" style="font-size:0.7rem;">Personajes</span>
+        </div>
+        <div class="stat-item stat-alliance" id="stat-item-alliance" title="Ver reparto de razas Alianza" style="display:flex; flex-direction:row; align-items:center; gap:0.4rem; padding:0 0.9rem; height:32px; box-sizing:border-box; min-width:90px; justify-content:center; border-radius:8px;">
+          <span class="stat-value" id="stat-alliance" style="font-size:0.95rem;">0</span>
+          <span class="stat-label" style="font-size:0.7rem;">Alianza</span>
         </div>
       </div>
       <div class="topbar-right">
@@ -72,53 +78,13 @@
       </div>
     </header>
 
-    <!-- Stats Bar -->
-    <div class="stats-bar">
-      <div class="stat-item">
-        <div class="stat-icon-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <span class="stat-value" id="stat-total">0</span>
-          <span class="stat-label">Personajes</span>
-        </div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-icon-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <span class="stat-value" id="stat-max-level">0</span>
-          <span class="stat-label">Nivel Máx</span>
-        </div>
-      </div>
-      <div class="stat-item stat-alliance" id="stat-item-alliance" title="Ver reparto de razas Alianza">
-        <div class="stat-icon-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L4.5 5V11C4.5 15.5 12 21 12 21S19.5 15.5 19.5 11V5L12 2Z"/>
-            <path d="M12 7V15M9 10L15 10"/>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <span class="stat-value" id="stat-alliance">0</span>
-          <span class="stat-label">Alianza</span>
-        </div>
-      </div>
-      <div class="stat-item stat-horde" id="stat-item-horde" title="Ver reparto de razas Horda">
-        <div class="stat-icon-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-             <path d="M12 3C12 3 5 7 5 12C5 17 12 21 12 21C12 21 19 17 19 12C19 7 12 3 12 3Z"/>
-             <path d="M12 8C10.5 8 9.5 9 9.5 10.5C9.5 12 12 11.5 12 13.5C12 15 10.5 16 9 16"/>
-          </svg>
-        </div>
-        <div class="stat-content">
-          <span class="stat-value" id="stat-horde">0</span>
-          <span class="stat-label">Horda</span>
-        </div>
+    <!-- Search Bar -->
+    <div class="stats-bar" style="justify-content:center; padding:0.65rem 1.5rem;">
+      <div class="search-box" style="max-width:480px; width:100%;">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="search-input" placeholder="Buscar personaje..." autocomplete="off">
       </div>
     </div>
 

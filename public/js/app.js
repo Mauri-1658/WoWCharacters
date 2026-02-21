@@ -816,7 +816,7 @@ function getClassEmoji(className) {
 // ═══════════════════════════════════════════════════════════
 function updateStats() {
   statTotal.textContent = allCharacters.length;
-  statMaxLevel.textContent =
+  if (statMaxLevel) statMaxLevel.textContent =
     allCharacters.length > 0
       ? Math.max(...allCharacters.map((c) => c.level))
       : 0;
