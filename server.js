@@ -534,6 +534,117 @@ app.get("/api/specialization/:specId", requireAuth, async (req, res) => {
   }
 });
 
+// ─── API: Search Global Characters ──────────────────────────────
+app.get("/api/character/search/:name", requireAuth, async (req, res) => {
+  try {
+    const { name } = req.params;
+    console.log(`[*] Searching for character "${name}" in all realms...`);
+
+    const response = await axios.get(`${API_BASE}/data/wow/search/character`, {
+      headers: {
+        Authorization: `Bearer ${req.session.accessToken}`,
+        "Cache-Control": "no-cache",
+      },
+      params: {
+        namespace: `profile-${REGION}`,
+        locale: "en_US",
+        "name.en_US": name,
+        _page: 1,
+        _pageSize: 20,
+        "orderby": "level:desc"
+      },
+    });
+
+    // Map Blizzard search results to a simpler format
+    const results = response.data.results.map((r) => {
+      const data = r.data;
+      return {
+        name: data.name.en_US,
+        realm: data.realm.name.en_US,
+        realmSlug: data.realm.slug,
+        level: data.level,
+        raceName: data.playable_race.name.en_US,
+        className: data.playable_class.name.en_US,
+        faction: data.faction.type,
+      };
+    });
+
+    res.json({ results });
+  } catch (err) {
+    console.error("Global search error:", err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: "Failed to perform global search",
+      details: err.response?.data || err.message,
+    });
+  }
+});
+
+// ─── API: Get Character Mounts Collection ────────────────────────
+app.get("/api/character/:realm/:name/mounts", requireAuth, async (req, res) => {
+  try {
+    const { realm, name } = req.params;
+    const realmSlug = realm.toLowerCase().replace(/\s+/g, "-");
+    const charName = name.toLowerCase();
+
+    console.log(`[Backend] Fetching mounts for ${charName}-${realmSlug} in ${REGION}...`);
+
+    const response = await axios.get(
+      `${API_BASE}/profile/wow/character/${realmSlug}/${charName}/collections/mounts`,
+      {
+        headers: {
+          Authorization: `Bearer ${req.session.accessToken}`,
+          "Cache-Control": "no-cache",
+        },
+        params: {
+          namespace: `profile-${REGION}`,
+          locale: "es_ES",
+        },
+      },
+    );
+    console.log(`[Backend] Successfully fetched ${response.data.mounts?.length} mounts for ${charName}`);
+    res.json(response.data);
+  } catch (err) {
+    const status = err.response?.status || 500;
+    const errorData = err.response?.data;
+    console.error(`[Backend] Mounts fetch error (${status}):`, JSON.stringify(errorData) || err.message);
+    
+    // Check if it's a 404 - might mean character not found or no mounts collection
+    if (status === 404) {
+      return res.status(404).json({ error: "No mounts collection found for this character", mounts: [] });
+    }
+    
+    res.status(status).json({
+      error: "Failed to fetch mounts collection",
+      details: errorData
+    });
+  }
+});
+
+// ─── API: Get Mount Media (Icon) ──────────────────────────────────
+app.get("/api/mount/:mountId/media", requireAuth, async (req, res) => {
+  try {
+    const { mountId } = req.params;
+    const response = await axios.get(
+      `${API_BASE}/data/wow/media/mount/${mountId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${req.session.accessToken}`,
+          "Cache-Control": "no-cache",
+        },
+        params: {
+          namespace: `static-${REGION}`,
+          locale: "en_US",
+        },
+      },
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status || 500).json({
+      error: "Failed to fetch mount media",
+    });
+  }
+});
+
 // ─── Start Server ──────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\nNexus — Battle.net Character Manager`);

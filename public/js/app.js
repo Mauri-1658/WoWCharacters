@@ -87,6 +87,7 @@ let currentUser = null;
 let mainCharIds = new Set(JSON.parse(localStorage.getItem('nexus_mains') || '[]'));
 let friendChars = JSON.parse(localStorage.getItem('nexus_friends') || '[]'); // Array of {name, realm}
 let allFriendData = [];
+let globalSearchTimeout = null;
 
 // ─── DOM Elements ───────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
@@ -143,6 +144,22 @@ const talentModalClose = $("#talent-modal-close");
 const talentTreeContainer = $("#talent-tree-container");
 const talentBtnInDetail = $("#modal-btn-talents");
 
+// Mythic Plus Modal
+const mplusModal = $("#mplus-modal");
+const mplusModalClose = $("#mplus-modal-close");
+const mplusModalOverlay = $("#mplus-modal-overlay");
+const mplusModalTitle = $("#mplus-modal-title");
+const mplusModalScoreBadge = $("#mplus-modal-score-badge");
+const mplusRunsContainer = $("#mplus-runs-container");
+
+// Mounts Modal
+const mountsModal = $("#mounts-modal");
+const mountsModalOverlay = $("#mounts-modal-overlay");
+const mountsModalClose = $("#mounts-modal-close");
+const mountsGrid = $("#mounts-grid");
+const mountsModalCount = $("#mounts-modal-count");
+
+
 // ═══════════════════════════════════════════════════════════
 // INITIALIZATION
 // ═══════════════════════════════════════════════════════════
@@ -177,7 +194,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   btnLogout.addEventListener("click", () => {
     window.location.href = "/auth/logout";
   });
+
   searchInput.addEventListener("input", applyFilters);
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const search = searchInput.value.trim();
+      const parts = search.split("-");
+      if (parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2) {
+        fetchGlobalCharacter(parts[0].trim(), parts[1].trim());
+      } else if (search.length >= 3) {
+        fetchGlobalCharacterByName(search);
+      }
+    }
+  });
+  
   filterFaction.addEventListener("change", applyFilters);
   filterClass.addEventListener("change", applyFilters);
   filterRealm.addEventListener("change", applyFilters);
@@ -195,14 +225,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   talentModalClose.addEventListener("click", closeTalentModal);
   talentModalOverlay.addEventListener("click", closeTalentModal);
 
+  // M+ modal events
+  mplusModalClose.addEventListener("click", closeMPlusModal);
+  mplusModalOverlay.addEventListener("click", closeMPlusModal);
+
+  // Mounts modal events
+  mountsModalClose.addEventListener("click", closeMountsModal);
+  mountsModalOverlay.addEventListener("click", closeMountsModal);
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeModal();
       closeFactionModal();
       closeTalentModal();
+      closeMPlusModal();
+      closeMountsModal();
     }
   });
-
   // Dashboard filter toggle
   const btnToggleFilters = $('#btn-toggle-filters');
   const filtersBar = $('#filters-bar');
@@ -373,13 +412,23 @@ function applyFilters() {
 function checkGlobalSearchTrigger(search) {
   const parts = search.split('-');
   
-  if (parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2) {
-    // Name-Realm format
+  if (parts.length === 2 && parts[0].length >= 2 && parts[1].length >= 2) {
     if (filteredCharacters.length === 0) {
-      appendGlobalSearchPrompt(parts[0], parts[1]);
+      const name = parts[0].trim();
+      const realm = parts[1].trim();
+      
+      appendGlobalSearchPrompt(name, realm);
+      
+      // Automatic lookup after 1s of inactivity
+      clearTimeout(globalSearchTimeout);
+      globalSearchTimeout = setTimeout(() => {
+        // Only trigger if the input hasn't changed and no local results still
+        if (searchInput.value.trim() === search && filteredCharacters.length === 0) {
+          fetchGlobalCharacter(name, realm, true); // true for 'silent' (don't open modal)
+        }
+      }, 1000);
     }
   } else if (search.length >= 3 && !search.includes('-')) {
-    // Name-only format (min 3 chars to avoid too many results)
     if (filteredCharacters.length === 0) {
       appendGlobalNameSearchPrompt(search);
     }
@@ -448,6 +497,36 @@ async function fetchGlobalCharacterByName(name) {
     `;
   } finally {
     showLoading(false);
+  }
+}
+
+async function fetchGlobalCharacter(name, realm, silent = false) {
+  const realmSlug = realm.toLowerCase().replace(/\s+/g, '-');
+  if (!silent) showLoading(true);
+  
+  try {
+    const res = await fetch(`/api/character/${realmSlug}/${name.toLowerCase()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error('No encontrado');
+    const char = await res.json();
+    
+    if (silent) {
+      // Render directly in grid
+      renderSearchResults([{
+        name: char.name,
+        realm: char.realm?.name,
+        realmSlug: realmSlug,
+        level: char.level,
+        raceName: char.race?.name,
+        className: char.character_class?.name,
+        faction: char.faction?.type
+      }], name);
+    } else {
+      openCharDetail(realmSlug, name);
+    }
+  } catch (err) {
+    if (!silent) appendGlobalSearchPrompt(name, realm);
+  } finally {
+    if (!silent) showLoading(false);
   }
 }
 
@@ -850,7 +929,12 @@ async function openCharDetail(realmSlug, charName) {
   $('#modal-race').textContent = '\u2014';
   $('#modal-class').textContent = '\u2014';
   $('#modal-spec').textContent = '\u2014';
-  $('#modal-hero-talent').textContent = '\u2014';
+  $('#modal-mounts-count').textContent = 'Cargando...';
+  const mountCard = $('#modal-stat-mounts');
+  if (mountCard) {
+    mountCard.style.pointerEvents = 'auto';
+    mountCard.onclick = () => console.log('[Mounts] Clicked while loading...');
+  }
   $('#modal-realm').textContent = '\u2014';
   $('#modal-achievements').textContent = '\u2014';
   $('#modal-achievements-pct').textContent = '0%';
@@ -906,35 +990,38 @@ async function openCharDetail(realmSlug, charName) {
     // Fetch Stats
     fetchStats(realmSlug, charName);
 
-    // Fetch Hero Talent (async, non-blocking)
-    fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/talents`, { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then(talentData => {
-        if (!talentData) return;
-        // Find the active loadout and its selected hero spec
-        const activeSpec = talentData.specializations?.find(
-          s => s.specialization?.id === talentData.active_specialization?.id
-        );
-        const activeLoadout = activeSpec?.loadouts?.find(l => l.is_active);
-        const heroSpec = activeLoadout?.selected_hero_spec;
-        if (heroSpec?.name) {
-          $('#modal-hero-talent').textContent = heroSpec.name;
-          // Load hero talent icon via Wowhead CDN (using spec icon as proxy)
-          const heroWrap = $('#modal-hero-talent-icon-wrap');
-          if (heroWrap && heroSpec.id) {
-            const heroIconUrl = `https://wow.zamimg.com/images/wow/icons/large/ability_herospec_${heroSpec.name.toLowerCase().replace(/[^a-z]/g, '')}.jpg`;
-            const img = document.createElement('img');
-            img.alt = heroSpec.name;
-            img.onerror = () => { heroWrap.innerHTML = ''; heroWrap.style.display = 'none'; };
-            img.onload = () => { heroWrap.style.display = 'flex'; };
-            img.src = heroIconUrl;
-            heroWrap.innerHTML = '';
-            heroWrap.appendChild(img);
-          }
-        }
-      })
-      .catch(() => {});
+    // Fetch Mounts Summary
+    const mountCountEl = $('#modal-mounts-count');
+    const mountCardEl = $('#modal-stat-mounts');
+    
+    if (mountCountEl) mountCountEl.textContent = 'Cargando...';
+    
+    fetch(`/api/character/${realmSlug}/${encodeURIComponent(charName.toLowerCase())}/mounts`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : r.json().then(e => { throw e; }))
+      .then(mountData => {
+        if (!mountCountEl || !mountCardEl) return;
 
+        if (!mountData || !mountData.mounts) {
+          mountCountEl.textContent = '0';
+          mountCardEl.onclick = () => alert('Este personaje no tiene colección de monturas pública o no se pudo acceder.');
+          return;
+        }
+        
+        const count = mountData.mounts.length;
+        mountCountEl.textContent = count;
+        mountCardEl.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openMountsModal(realmSlug, charName, mountData);
+        };
+      })
+      .catch(err => {
+        console.error('[Mounts] Fetch error:', err);
+        if (mountCountEl) mountCountEl.textContent = 'N/D';
+        if (mountCardEl) {
+          mountCardEl.onclick = () => alert('No se pudo cargar la colección de monturas. Puede que el personaje no sea tuyo o haya un error con la API de Blizzard.');
+        }
+      });
 
   } catch (err) {
     console.error('Error loading character details:', err);
@@ -1126,11 +1213,31 @@ async function loadPvEProgress(realmSlug, charName) {
       if (rating > 0) {
         mplusScore.textContent = `Rating M+ ${rating}`;
         mplusScore.classList.remove('hidden');
+        
         // Color coding for score
-        if (rating >= 2500) mplusScore.style.background = 'linear-gradient(135deg, #ff8000, #d94000)';
-        else if (rating >= 2000) mplusScore.style.background = 'linear-gradient(135deg, #a330c9, #7124a3)';
-        else if (rating >= 1500) mplusScore.style.background = 'linear-gradient(135deg, #0070dd, #004a91)';
-        else mplusScore.style.background = 'linear-gradient(135deg, #1eff00, #14a300)';
+        let ratingColor = '#1eff00';
+        if (rating >= 2500) {
+          mplusScore.style.background = 'linear-gradient(135deg, #ff8000, #d94000)';
+          ratingColor = '#ff8000';
+        } else if (rating >= 2000) {
+          mplusScore.style.background = 'linear-gradient(135deg, #a330c9, #7124a3)';
+          ratingColor = '#a330c9';
+        } else if (rating >= 1500) {
+          mplusScore.style.background = 'linear-gradient(135deg, #0070dd, #004a91)';
+          ratingColor = '#0070dd';
+        } else {
+          mplusScore.style.background = 'linear-gradient(135deg, #1eff00, #14a300)';
+          ratingColor = '#1eff00';
+        }
+
+        // Attach click event for the modal
+        mplusScore.onclick = (e) => {
+          e.preventDefault();
+          console.log(`[M+ Button] Opening modal for ${charName}`);
+          openMPlusModal(realmSlug, charName, rating, ratingColor);
+        };
+        // Also add pointer events just in case
+        mplusScore.style.pointerEvents = 'auto';
       }
     }
   } catch (err) { console.error('Error loading M+:', err); }
@@ -1633,5 +1740,137 @@ function showLoading(show) {
   if (show) {
     charsGrid.innerHTML = "";
     noResults.classList.add("hidden");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MYTHIC PLUS DETAILS
+// ═══════════════════════════════════════════════════════════
+async function openMPlusModal(realmSlug, charName, rating, ratingColor) {
+  mplusModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  // Set initial header info
+  mplusModalTitle.textContent = `Mazmorras M+ — ${charName}`;
+  mplusModalScoreBadge.textContent = rating;
+  mplusModalScoreBadge.style.background = ratingColor;
+  mplusRunsContainer.innerHTML = '<p class="loading-text" style="color:var(--text-muted); text-align:center;">Recuperando registros de piedra angular...</p>';
+
+  try {
+    const res = await fetch(`/api/character/${realmSlug}/${charName.toLowerCase()}/mythic-plus`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      renderMPlusRuns(data);
+    } else {
+      mplusRunsContainer.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No se encontraron datos de M+ para este personaje.</p>';
+    }
+  } catch (err) {
+    console.error('Error fetching M+ details:', err);
+    mplusRunsContainer.innerHTML = '<p style="color:var(--text-muted); text-align:center;">Error al cargar los detalles de M+.</p>';
+  }
+}
+
+function closeMPlusModal() {
+  mplusModal.classList.add('hidden');
+  if (charModal.classList.contains('hidden')) {
+    document.body.style.overflow = 'auto';
+  }
+}
+
+function renderMPlusRuns(data) {
+  const seasonRuns = data.seasons?.[0]?.best_runs || [];
+  
+  if (seasonRuns.length === 0) {
+    mplusRunsContainer.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No hay mazmorras registradas en la temporada actual.</p>';
+    return;
+  }
+
+  // Sort by level desc
+  const sortedRuns = [...seasonRuns].sort((a, b) => b.keystone_level - a.keystone_level);
+
+  mplusRunsContainer.innerHTML = sortedRuns.map(run => {
+    const isCompleted = run.is_completed_within_time;
+    const timeClass = isCompleted ? 'time-ontime' : 'time-overtime';
+    const dungeonName = run.dungeon?.name || 'Mazmorra desconocida';
+    
+    // Format duration (ms to mm:ss)
+    const durationMs = run.duration;
+    const mins = Math.floor(durationMs / 60000);
+    const secs = Math.floor((durationMs % 60000) / 1000);
+    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+    return `
+      <div class="mplus-run-item">
+        <div class="mplus-run-info">
+          <div class="mplus-run-name">${dungeonName}</div>
+          <div class="mplus-run-meta">Completada el ${new Date(run.completed_at).toLocaleDateString()}</div>
+        </div>
+        <div class="mplus-run-stats">
+          <div class="mplus-run-level">+${run.keystone_level}</div>
+          <div class="mplus-run-time ${timeClass}">${timeStr} ${isCompleted ? '(A tiempo)' : '(Fuera de tiempo)'}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MOUNTS COLLECTION
+// ═══════════════════════════════════════════════════════════
+function openMountsModal(realmSlug, charName, initialData) {
+  mountsModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  mountsModalCount.textContent = initialData?.mounts?.length || 0;
+  renderMounts(initialData.mounts);
+}
+
+function closeMountsModal() {
+  mountsModal.classList.add('hidden');
+  if (charModal.classList.contains('hidden')) {
+    document.body.style.overflow = 'auto';
+  }
+}
+
+async function renderMounts(mounts) {
+  if (!mounts || mounts.length === 0) {
+    mountsGrid.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No tienes monturas registradas.</p>';
+    return;
+  }
+
+  // Sort by name
+  const sorted = [...mounts].sort((a, b) => (a.mount.name || '').localeCompare(b.mount.name || ''));
+
+  mountsGrid.innerHTML = sorted.map(m => {
+    const mountId = m.mount.id;
+    return `
+      <div class="mount-item" data-id="${mountId}">
+        <div class="mount-icon-wrap" id="mount-icon-${mountId}">
+          <div class="spinner-small"></div>
+        </div>
+        <div class="mount-name">${m.mount.name}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Fetch icons sequentially or in small batches to avoid bombing the server
+  for (const m of sorted) {
+    const mountId = m.mount.id;
+    fetchMountIcon(mountId);
+  }
+}
+
+async function fetchMountIcon(mountId) {
+  try {
+    const res = await fetch(`/api/mount/${mountId}/media`);
+    if (res.ok) {
+      const data = await res.json();
+      const iconUrl = data.assets?.find(a => a.key === 'icon')?.value;
+      const wrap = document.getElementById(`mount-icon-${mountId}`);
+      if (wrap && iconUrl) {
+        wrap.innerHTML = `<img src="${iconUrl}" alt="Mount">`;
+      }
+    }
+  } catch (err) {
+    // Silently fail for individual icons
   }
 }
