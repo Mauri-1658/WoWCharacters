@@ -2392,7 +2392,7 @@ body {
 .mounts-modal-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--glass-border);
@@ -2402,15 +2402,24 @@ body {
   font-family: "Cinzel", serif;
   font-size: 1.5rem;
   color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .mounts-count-badge {
+  display: none;
+}
+
+.mounts-count-inline {
   background: rgba(212, 168, 67, 0.15);
   color: var(--gold-light);
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
+  padding: 0.2rem 0.7rem;
+  border-radius: 12px;
   font-weight: 800;
+  font-size: 0.9rem;
   border: 1px solid var(--gold);
+  vertical-align: middle;
 }
 
 .mounts-grid {
@@ -2485,4 +2494,13 @@ body {
   transform: scale(1.02);
   background: rgba(255, 255, 255, 0.08) !important;
   border-color: var(--gold) !important;
+}
+
+#mounts-modal .modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+  cursor: pointer;
+  pointer-events: auto;
 }

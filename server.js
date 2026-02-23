@@ -645,6 +645,135 @@ app.get("/api/mount/:mountId/media", requireAuth, async (req, res) => {
   }
 });
 
+// ─── Wowhead Fallback: Item Icon ────────────────────────────────
+app.get("/api/wowhead/item/:itemId/icon", async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const response = await axios.get(
+      `https://nether.wowhead.com/tooltip/item/${itemId}?dataEnv=1&locale=0`,
+      { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const iconName = response.data?.icon;
+    if (iconName) {
+      return res.json({ icon: `https://wow.zamimg.com/images/wow/icons/large/${iconName}.jpg` });
+    }
+    res.status(404).json({ error: "Icon not found" });
+  } catch (err) {
+    res.status(500).json({ error: "Wowhead fallback failed" });
+  }
+});
+
+// ─── Wowhead Fallback: Mount Icon ───────────────────────────────
+app.get("/api/wowhead/mount/:mountId/icon", async (req, res) => {
+  try {
+    const { mountId } = req.params;
+    // Try Wowhead mount tooltip
+    const response = await axios.get(
+      `https://nether.wowhead.com/tooltip/spell/${mountId}?dataEnv=1&locale=0`,
+      { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const iconName = response.data?.icon;
+    if (iconName) {
+      return res.json({ icon: `https://wow.zamimg.com/images/wow/icons/large/${iconName}.jpg` });
+    }
+    // Fallback: try the mount page itself
+    const mountRes = await axios.get(
+      `https://nether.wowhead.com/tooltip/mount/${mountId}?dataEnv=1&locale=0`,
+      { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const mountIcon = mountRes.data?.icon;
+    if (mountIcon) {
+      return res.json({ icon: `https://wow.zamimg.com/images/wow/icons/large/${mountIcon}.jpg` });
+    }
+    res.status(404).json({ error: "Mount icon not found" });
+  } catch (err) {
+    res.status(500).json({ error: "Wowhead mount fallback failed" });
+  }
+});
+
+// ─── Wowhead Fallback: Spell/Talent Icon ────────────────────────
+app.get("/api/wowhead/spell/:spellId/icon", async (req, res) => {
+  try {
+    const { spellId } = req.params;
+    const response = await axios.get(
+      `https://nether.wowhead.com/tooltip/spell/${spellId}?dataEnv=1&locale=0`,
+      { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const iconName = response.data?.icon;
+    if (iconName) {
+      return res.json({ icon: `https://wow.zamimg.com/images/wow/icons/large/${iconName}.jpg` });
+    }
+    res.status(404).json({ error: "Spell icon not found" });
+  } catch (err) {
+    res.status(500).json({ error: "Wowhead spell fallback failed" });
+  }
+});
+
+// ─── Wowhead Fallback: Class Icon Map (static, no API call) ─────
+const CLASS_ICON_MAP = {
+  1: 'classicon_warrior',
+  2: 'classicon_paladin',
+  3: 'classicon_hunter',
+  4: 'classicon_rogue',
+  5: 'classicon_priest',
+  6: 'classicon_deathknight',
+  7: 'classicon_shaman',
+  8: 'classicon_mage',
+  9: 'classicon_warlock',
+  10: 'classicon_monk',
+  11: 'classicon_druid',
+  12: 'classicon_demonhunter',
+  13: 'classicon_evoker',
+};
+
+app.get("/api/wowhead/class/:classId/icon", (req, res) => {
+  const classId = parseInt(req.params.classId);
+  const iconName = CLASS_ICON_MAP[classId];
+  if (iconName) {
+    return res.json({ icon: `https://wow.zamimg.com/images/wow/icons/large/${iconName}.jpg` });
+  }
+  res.status(404).json({ error: "Class icon not found" });
+});
+
+// ─── Wowhead Fallback: Spec Icon Map (static) ──────────────────
+const SPEC_ICON_MAP = {
+  // Warrior
+  71: 'ability_warrior_savageblow', 72: 'ability_warrior_innerrage', 73: 'ability_warrior_defensivestance',
+  // Paladin
+  65: 'spell_holy_holybolt', 66: 'ability_paladin_shieldofthetemplar', 70: 'spell_holy_auraoflight',
+  // Hunter
+  253: 'ability_hunter_bestialdiscipline', 254: 'ability_hunter_focusedaim', 255: 'ability_hunter_camouflage',
+  // Rogue
+  259: 'ability_rogue_deadlybrew', 260: 'ability_backstab', 261: 'inv_sword_30',
+  // Priest
+  256: 'spell_holy_powerwordshield', 257: 'spell_holy_guardianspirit', 258: 'spell_shadow_shadowwordpain',
+  // Death Knight
+  250: 'spell_deathknight_bloodpresence', 251: 'spell_deathknight_frostpresence', 252: 'spell_deathknight_unholypresence',
+  // Shaman
+  262: 'spell_nature_lightning', 263: 'spell_shaman_improvedstormstrike', 264: 'spell_nature_magicimmunity',
+  // Mage
+  62: 'spell_holy_magicalsentry', 63: 'spell_fire_firebolt02', 64: 'spell_frost_frostbolt02',
+  // Warlock
+  265: 'spell_shadow_deathcoil', 266: 'spell_shadow_metamorphosis', 267: 'spell_shadow_rainoffire',
+  // Monk
+  268: 'spell_monk_brewmaster_spec', 270: 'spell_monk_mistweaver_spec', 269: 'spell_monk_windwalker_spec',
+  // Druid
+  102: 'spell_nature_starfall', 103: 'ability_druid_catform', 104: 'ability_racial_bearform', 105: 'spell_nature_healingtouch',
+  // Demon Hunter
+  577: 'ability_demonhunter_specdps', 581: 'ability_demonhunter_spectank',
+  // Evoker
+  1467: 'classicon_evoker', 1468: 'classicon_evoker', 1473: 'classicon_evoker',
+};
+
+app.get("/api/wowhead/spec/:specId/icon", (req, res) => {
+  const specId = parseInt(req.params.specId);
+  const iconName = SPEC_ICON_MAP[specId];
+  if (iconName) {
+    return res.json({ icon: `https://wow.zamimg.com/images/wow/icons/large/${iconName}.jpg` });
+  }
+  res.status(404).json({ error: "Spec icon not found" });
+});
+
 // ─── Start Server ──────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\nNexus — Battle.net Character Manager`);

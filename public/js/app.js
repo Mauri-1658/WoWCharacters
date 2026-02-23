@@ -1137,7 +1137,7 @@ async function loadModalIcons(char) {
   classWrap.innerHTML = '';
   specWrap.innerHTML = '';
 
-  const fetchIcon = async (type, id, container, fallbackUrl = '') => {
+  const fetchIcon = async (type, id, container, fallbackUrl = '', wowheadFallbackUrl = '') => {
     if (!id && !fallbackUrl) return;
     try {
       if (id) {
@@ -1153,7 +1153,22 @@ async function loadModalIcons(char) {
         }
       }
       
-      // Use fallback if API fails or no ID provided
+      // Wowhead API fallback
+      if (wowheadFallbackUrl) {
+        try {
+          const whRes = await fetch(wowheadFallbackUrl);
+          if (whRes.ok) {
+            const whData = await whRes.json();
+            if (whData.icon) {
+              container.innerHTML = `<img src="${whData.icon}" alt="${type}">`;
+              container.style.display = 'flex';
+              return;
+            }
+          }
+        } catch (e) { /* Wowhead fallback failed too */ }
+      }
+
+      // Use static fallback URL if everything else fails
       if (fallbackUrl) {
         container.innerHTML = `<img src="${fallbackUrl}" alt="${type}">`;
         container.style.display = 'flex';
@@ -1187,11 +1202,14 @@ async function loadModalIcons(char) {
     raceFallback = `https://wow.zamimg.com/images/wow/icons/large/race_${raceMap[raceName]}_${gender}.jpg`;
   }
 
-  // Parallel fetch
+  // Parallel fetch with Wowhead fallback URLs
+  const classId = char.character_class?.id;
+  const specId = char.active_spec?.id;
+
   await Promise.all([
     fetchIcon('playable-race', char.race?.id, raceWrap, raceFallback),
-    char.character_class?.id ? fetchIcon('playable-class', char.character_class.id, classWrap) : Promise.resolve(),
-    char.active_spec?.id ? fetchIcon('playable-specialization', char.active_spec.id, specWrap) : Promise.resolve()
+    classId ? fetchIcon('playable-class', classId, classWrap, '', `/api/wowhead/class/${classId}/icon`) : Promise.resolve(),
+    specId ? fetchIcon('playable-specialization', specId, specWrap, '', `/api/wowhead/spec/${specId}/icon`) : Promise.resolve()
   ]);
 }
 
@@ -1472,13 +1490,32 @@ async function loadItemIcons() {
     const itemId = wrap.dataset.itemId;
     if (!itemId) continue;
     try {
-      const res = await fetch(`/api/item/${itemId}/media`, { cache: "no-store" });
-      if (!res.ok) continue;
-      const media = await res.json();
-      const iconAsset = media.assets?.find(a => a.key === 'icon') || media.assets?.[0];
-      if (iconAsset?.value) {
+      let iconUrl = null;
+
+      // Try Blizzard API first
+      try {
+        const res = await fetch(`/api/item/${itemId}/media`, { cache: "no-store" });
+        if (res.ok) {
+          const media = await res.json();
+          const iconAsset = media.assets?.find(a => a.key === 'icon') || media.assets?.[0];
+          if (iconAsset?.value) iconUrl = iconAsset.value;
+        }
+      } catch (e) { /* Blizzard failed, try Wowhead */ }
+
+      // Fallback: Wowhead
+      if (!iconUrl) {
+        try {
+          const whRes = await fetch(`/api/wowhead/item/${itemId}/icon`);
+          if (whRes.ok) {
+            const whData = await whRes.json();
+            if (whData.icon) iconUrl = whData.icon;
+          }
+        } catch (e) { /* Wowhead also failed */ }
+      }
+
+      if (iconUrl) {
         const img = document.createElement('img');
-        img.src = iconAsset.value;
+        img.src = iconUrl;
         img.alt = '';
         img.className = 'equip-icon-img';
         img.onload = () => {
@@ -1714,9 +1751,9 @@ async function renderTalentTree(treeData, activeLoadout) {
       // Symbol
       if (node.node_type?.type === 'CHOICE') el.classList.add('choice');
 
-      // Fetch Icon via proxy
+      // Fetch Icon via proxy (Blizzard first, then Wowhead fallback)
       fetch(`/api/media/talent/${talentId}`)
-        .then(res => res.json())
+        .then(res => res.ok ? res.json() : Promise.reject('Blizzard failed'))
         .then(media => {
           const asset = media.assets?.find(a => a.key === 'icon') || media.assets?.[0];
           if (asset?.value) {
@@ -1724,8 +1761,24 @@ async function renderTalentTree(treeData, activeLoadout) {
             img.src = asset.value;
             img.alt = talentEntry.talent.name;
             el.appendChild(img);
+          } else {
+            throw new Error('No icon asset');
           }
-        }).catch(() => {});
+        })
+        .catch(() => {
+          // Wowhead fallback for talent icons
+          fetch(`/api/wowhead/spell/${talentId}/icon`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data?.icon) {
+                const img = document.createElement('img');
+                img.src = data.icon;
+                img.alt = talentEntry.talent.name;
+                el.appendChild(img);
+              }
+            })
+            .catch(() => {});
+        });
     }
 
     talentTreeContainer.appendChild(el);
@@ -1820,11 +1873,15 @@ function renderMPlusRuns(data) {
 function openMountsModal(realmSlug, charName, initialData) {
   mountsModal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
-  mountsModalCount.textContent = initialData?.mounts?.length || 0;
+  const count = initialData?.mounts?.length || 0;
+  mountsModalCount.textContent = count;
+  const titleEl = document.getElementById('mounts-modal-title');
+  if (titleEl) titleEl.innerHTML = `Colección de Monturas <span class="mounts-count-inline">${count}</span>`;
   renderMounts(initialData.mounts);
 }
 
 function closeMountsModal() {
+  if (!mountsModal || mountsModal.classList.contains('hidden')) return;
   mountsModal.classList.add('hidden');
   if (charModal.classList.contains('hidden')) {
     document.body.style.overflow = 'auto';
@@ -1859,18 +1916,40 @@ async function renderMounts(mounts) {
   }
 }
 
+const DEFAULT_MOUNT_ICON = 'https://wow.zamimg.com/images/wow/icons/large/ability_mount_invincible.jpg';
+
 async function fetchMountIcon(mountId) {
+  const wrap = document.getElementById(`mount-icon-${mountId}`);
+  if (!wrap) return;
   try {
-    const res = await fetch(`/api/mount/${mountId}/media`);
-    if (res.ok) {
-      const data = await res.json();
-      const iconUrl = data.assets?.find(a => a.key === 'icon')?.value;
-      const wrap = document.getElementById(`mount-icon-${mountId}`);
-      if (wrap && iconUrl) {
-        wrap.innerHTML = `<img src="${iconUrl}" alt="Mount">`;
+    let iconUrl = null;
+
+    // Try Blizzard API first
+    try {
+      const res = await fetch(`/api/mount/${mountId}/media`);
+      if (res.ok) {
+        const data = await res.json();
+        iconUrl = data.assets?.find(a => a.key === 'icon')?.value;
       }
+    } catch (e) { /* Blizzard failed */ }
+
+    // Fallback: Wowhead
+    if (!iconUrl) {
+      try {
+        const whRes = await fetch(`/api/wowhead/mount/${mountId}/icon`);
+        if (whRes.ok) {
+          const whData = await whRes.json();
+          if (whData.icon) iconUrl = whData.icon;
+        }
+      } catch (e) { /* Wowhead also failed */ }
+    }
+
+    if (iconUrl) {
+      wrap.innerHTML = `<img src="${iconUrl}" alt="Mount" onerror="this.src='${DEFAULT_MOUNT_ICON}'">`;
+    } else {
+      wrap.innerHTML = `<img src="${DEFAULT_MOUNT_ICON}" alt="Mount">`;
     }
   } catch (err) {
-    // Silently fail for individual icons
+    wrap.innerHTML = `<img src="${DEFAULT_MOUNT_ICON}" alt="Mount">`;
   }
 }
